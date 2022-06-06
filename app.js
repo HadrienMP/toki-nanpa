@@ -33,7 +33,7 @@ io.on('connection', (socket) => {
     try {
       const { room, data: innerData } = data;
       if (!socket.rooms.has(room)) join(room);
-      io.to(room).emit("message", { sender: userId, innerData });
+      io.to(room).emit("message", { sender: userId, data: innerData });
     } catch (e) {
       console.error(userId, e, data);
       io.to(userId).emit('error', {
