@@ -15,13 +15,13 @@ app.get('/', (req, res) => {
 
 io.on('connection', (socket) => {
   const userId = socket.id
-  io.to(userId).emit(`Welcome!`, { socketId: userId });
+  io.to(userId).emit('info', `Welcome!`, { socketId: userId });
 
   socket.on('join', data => {
     try {
-      const { room } = JSON.parse(data);
-      join(room);
+      join(data.room);
     } catch (e) {
+      console.error(userId, e, data);
       io.to(userId).emit('error', {
         message: `You could not join because your message is corrupted.\n\nTo join a room, use this: socket.emit("join", '{"room":"my-room"}')`,
         details: e.message,
@@ -31,10 +31,11 @@ io.on('connection', (socket) => {
 
   socket.on('message', data => {
     try {
-      const { room, data: innerData } = JSON.parse(data);
+      const { room, data: innerData } = data;
       if (!socket.rooms.has(room)) join(room);
       io.to(room).emit("message", innerData);
     } catch (e) {
+      console.error(userId, e, data);
       io.to(userId).emit('error', {
         message:
           `You could not send a message to this room because your message is corrupted.\n\n` +
@@ -45,20 +46,18 @@ io.on('connection', (socket) => {
   });
 
   socket.on("disconnecting", _ => {
-    console.log(socket.rooms);
     socket.rooms.forEach(room => {
-      io.to(room).emit(`${userId} is leaving ${room}`);
+      io.to(room).emit('info', `${userId} is leaving ${room}`);
     });
   })
 
   function join(room) {
     socket.join(room);
-    io.to(room).emit(`${userId} has joined ${room}`);
+    io.to(room).emit('info', `${userId} has joined ${room}`);
   }
 });
 
 const port = process.env.PORT || 9876;
 server.listen(port, () => {
   console.log(`Server started: http://0.0.0.0:${port}`)
-  console.log(`Socket io available on: http://0.0.0.0:${port}`)
 })
