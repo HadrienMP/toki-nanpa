@@ -15,7 +15,7 @@ app.get('/', (req, res) => {
 
 io.on('connection', (socket) => {
   const userId = socket.id
-  io.to(userId).emit('info', `Welcome!`, { socketId: userId });
+  io.to(userId).emit('info', { message: 'Welcome!', socketId: userId });
 
   socket.on('join', data => {
     try {
@@ -23,7 +23,9 @@ io.on('connection', (socket) => {
     } catch (e) {
       console.error(userId, e, data);
       io.to(userId).emit('error', {
-        message: `You could not join because your message is corrupted.\n\nTo join a room, use this: socket.emit("join", '{"room":"my-room"}')`,
+        message: 
+          `You could not join because your message is corrupted.\n\n
+          To join a room, use this: socket.emit("join", '{"room":"my-room"}')`,
         details: e.message,
       })
     }
@@ -47,13 +49,13 @@ io.on('connection', (socket) => {
 
   socket.on("disconnecting", _ => {
     socket.rooms.forEach(room => {
-      io.to(room).emit('info', `${userId} is leaving ${room}`);
+      io.to(room).emit('info', { message: `${userId} is leaving ${room}` });
     });
   })
 
   function join(room) {
     socket.join(room);
-    io.to(room).emit('info', `${userId} has joined ${room}`);
+    io.to(room).emit('info', { message: `${userId} has joined ${room}` });
   }
 });
 
