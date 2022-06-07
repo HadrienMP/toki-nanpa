@@ -15,7 +15,7 @@ app.get('/', (req, res) => {
 
 io.on('connection', (socket) => {
   const userId = socket.id
-  io.to(userId).emit('info', { message: 'Welcome!', socketId: userId });
+  io.to(userId).emit('info', { message: 'Welcome!', socketId: userId, type:"welcome" });
 
   socket.on('join', data => {
     try {
@@ -49,13 +49,13 @@ io.on('connection', (socket) => {
 
   socket.on("disconnecting", _ => {
     socket.rooms.forEach(room => {
-      io.to(room).emit('info', { message: `${userId} is leaving ${room}` });
+      io.to(room).emit('disconnecting', { message: `${userId} is leaving ${room}`, userId });
     });
   })
 
   function join(room) {
     socket.join(room);
-    io.to(room).emit('info', { message: `${userId} has joined ${room}` });
+    io.to(room).emit('joined', { message: `${userId} has joined ${room}`, userId });
   }
 });
 
