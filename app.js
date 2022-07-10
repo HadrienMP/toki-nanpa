@@ -15,7 +15,7 @@ app.get('/', (req, res) => {
 
 io.on('connection', (socket) => {
   const peer = socket.id
-  io.to(peer).emit('info', { message: 'Welcome!', peer, type:"welcome" });
+  io.to(peer).emit('info', { message: 'Welcome!', peer, type: "welcome" });
 
   socket.on('join', data => {
     try {
@@ -23,7 +23,7 @@ io.on('connection', (socket) => {
     } catch (e) {
       console.error(peer, e, data);
       io.to(peer).emit('error', {
-        message: 
+        message:
           `You could not join because your message is corrupted.\n\n
           To join a room, use this: socket.emit("join", '{"room":"my-room"}')`,
         details: e.message,
@@ -49,13 +49,13 @@ io.on('connection', (socket) => {
 
   socket.on("disconnecting", _ => {
     socket.rooms.forEach(room => {
-      io.to(room).emit('peer', { message: `${peer} is leaving ${room}`, peer, type:"disconnecting", room });
+      io.to(room).emit('peer', { message: `${peer} is leaving ${room}`, peer, type: "disconnecting", room });
     });
   })
 
   function join(room) {
     socket.join(room);
-    io.to(room).emit('peer', { message: `${peer} has joined ${room}`, peer, type:"joined", room });
+    io.to(room).emit('peer', { message: `${peer} has joined ${room}`, peer, type: "joined", room });
   }
 });
 
