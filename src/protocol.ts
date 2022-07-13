@@ -1,22 +1,27 @@
 import * as t from 'io-ts';
 import { Server } from 'socket.io';
 
+const PeerIdC = t.string;
+export type PeerId = t.TypeOf<typeof PeerIdC>;
+const RoomNameC = t.string;
+export type RoomName = t.TypeOf<typeof RoomNameC>;
+
 // ------------------------------------
 // Inbound
 // ------------------------------------
-export const InboundC = t.type({ room: t.string, data: t.unknown });
+export const InboundC = t.type({ room: RoomNameC, data: t.unknown });
+export const InDirectMessageC = t.type({to: PeerIdC, data: t.unknown});
 
 // ------------------------------------
 // Outbound
 // ------------------------------------
-export type PeerId = string;
-export type RoomName = string;
 
 export type Outbound<T> = {
-  type: 'left' | 'message' | 'joined';
+  type: 'left' | 'message' | 'joined' | 'direct-message';
   room: RoomName;
   data: T;
 };
+export type OutDirectMessage<T> = { to: PeerId; data: T; };
 
 export const toJoinedMsg = (room: RoomName): Outbound<{}> => ({
   type: 'joined',
@@ -33,15 +38,25 @@ export const toMsg = <T>(params: { room: RoomName; data: T }): Outbound<T> => ({
   room: params.room,
   data: params.data
 });
+export const toDirectMessage = <T>(params: { peer: PeerId; data: T }): OutDirectMessage<T> => ({
+  to: params.peer,
+  data: params.data
+});
 
 // ------------------------------------
 // Sending messages
 // ------------------------------------
 
-export const sendWith =
+export const sendMessageWith =
   (io: Server, peer: PeerId) =>
   (message: Outbound<any>): void => {
     io.to(message.room).emit('message', { ...message, from: peer });
+  };
+
+export const sendDirectMessageWith =
+  (io: Server, peer: PeerId) =>
+  (message: OutDirectMessage<any>): void => {
+    io.to(message.to).emit('direct-message', { ...message, from: peer });
   };
 
 export const sendErrorWith =

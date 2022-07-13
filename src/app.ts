@@ -6,11 +6,12 @@ import * as O from 'fp-ts/Option';
 import http from 'http';
 import { Server, Socket } from 'socket.io';
 import {
-  InboundC,
+  InboundC, InDirectMessageC,
   Outbound,
   RoomName,
-  sendErrorWith as sendError,
-  sendWith as sendMsg,
+  sendDirectMessageWith,
+  sendErrorWith,
+  sendMessageWith,
   toJoinedMsg,
   toLeftMsg,
   toMsg as toOutbound
@@ -33,15 +34,20 @@ const maybeJoinIn = (socket: Socket) =>(room: RoomName): O.Option<Outbound<unkno
 
 io.on('connection', (socket) => {
   const maybeJoin = maybeJoinIn(socket);
+  const sendError = sendErrorWith(io, socket.id);
+  const sendMsg = sendMessageWith(io, socket.id);
+  const sendDm = sendDirectMessageWith(io, socket.id);
+  
   socket.on(
     'message',
     flow(
       InboundC.decode,
       E.map((inbound) => pipe(maybeJoin(inbound.room), A.fromOption, A.append(toOutbound(inbound)))),
-      E.match(sendError(io, socket.id), A.map(sendMsg(io, socket.id)))
+      E.match(sendError, A.map(sendMsg))
     )
   );
-  socket.on('disconnecting', (_) => socket.rooms.forEach(flow(toLeftMsg, sendMsg(io, socket.id))));
+  socket.on('direct-message', flow(InDirectMessageC.decode, E.match(sendError, sendDm)));
+  socket.on('disconnecting', (_) => socket.rooms.forEach(flow(toLeftMsg, sendMsg)));
 });
 
 const port = process.env.PORT || 9876;

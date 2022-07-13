@@ -3,6 +3,8 @@ Toki Nanpa
 
 __toki nanpa__: _toki pona:_ digital talk
 
+The simplest description of it is: __a chat server for machines__
+
 This back end uses _Socket IO_ (websocket + poklyfills) to allow __peer to peer__ webapp communication.
 It's a __minimal protocol__ that is usefull to me. It __only transmits the messages__. It does not save them or log them.
 
@@ -10,8 +12,11 @@ It's a __minimal protocol__ that is usefull to me. It __only transmits the messa
 Protocol
 --------
 ===> 'message', {room: 'room name', data: xxx}
-<=== 'message', {type: 'joined', room: 'room name', peer: 'peerId123', data: {}}
-<=== 'message', {type: 'message', room: 'room name', peer: 'peerId123', data: xxx}
+<=== 'message', {type: 'joined', room: 'room name', peer: 'socket id', data: {}}
+<=== 'message', {type: 'message', room: 'room name', peer: 'socket id', data: xxx}
+
+===> 'direct-message', {to: 'socket id', data: xxx}
+<=== 'direct-message', {to: 'socket id', from: 'other socket id', data: xxx}
 
 auto: 'disconnecting'
 <=== 'message', {type: 'left', room: 'room name', peer: 'peerId123', data: {}}
