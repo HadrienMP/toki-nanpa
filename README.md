@@ -9,15 +9,11 @@ It's a __minimal protocol__ that is usefull to me. It __only transmits the messa
 
 Protocol
 --------
-
-===> 'join', 'room name'
-<=== 'peer', {room: 'room name', message: ..., peer: 'peerId123', type: 'joined'}
-
 ===> 'message', {room: 'room name', data: xxx}
-<=== 'message', {room: 'room name', data: xxx, peer: 'peerId123'}
+<=== 'message', {type: 'message', room: 'room name', peer: 'peerId123', data: xxx}
 
 auto: 'disconnecting'
-<=== 'peer', {room: 'room name', message: ..., type: 'disconnecting', peer: 'peerId123'}
+<=== 'message', {type: 'left', room: 'room name', peer: 'peerId123', data: {}}
 
 
 Client example
@@ -37,22 +33,17 @@ socket.emit('message', { room: 'my current room', data: 'whatever you want' })
 
 // Receive messages
 socket.on('message', (msg) => {
-    const {room, data} = msg;
-    console.debug('<=== message', JSON.stringify(msg));
-});
-
-// Receive peer changes
-socket.on('peer', msg => {
-    switch (msg.type) {
-        case "joined":
-            console.log('<=== joined:', msg.peer);
+    const {room, type, data, peer} = msg;
+    switch(type) {
+        case 'message':
+            console.debug('<=== message', {data});
             break;
-        case "disconnecting":
-            console.log('<=== disconnecting', msg.peer);
+        case 'left':
+            console.debug('<=== left', peer);
             break;
         default:
             console.error('unknown peer event: ' + JSON.stringify(msg))
             break;
     }
-})
+});
 ```
