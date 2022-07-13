@@ -13,14 +13,19 @@ export type PeerId = string;
 export type RoomName = string;
 
 export type Outbound<T> = {
-  type: 'left' | 'message';
+  type: 'left' | 'message' | 'joined';
   room: RoomName;
   data: T;
 };
 
-export const toLeftMsg = (params: { room: RoomName }): Outbound<{}> => ({
+export const toJoinedMsg = (room: RoomName): Outbound<{}> => ({
+  type: 'joined',
+  room,
+  data: {}
+});
+export const toLeftMsg = (room: RoomName): Outbound<{}> => ({
   type: 'left',
-  room: params.room,
+  room,
   data: {}
 });
 export const toMsg = <T>(params: { room: RoomName; data: T }): Outbound<T> => ({

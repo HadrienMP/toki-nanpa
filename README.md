@@ -10,6 +10,7 @@ It's a __minimal protocol__ that is usefull to me. It __only transmits the messa
 Protocol
 --------
 ===> 'message', {room: 'room name', data: xxx}
+<=== 'message', {type: 'joined', room: 'room name', peer: 'peerId123', data: {}}
 <=== 'message', {type: 'message', room: 'room name', peer: 'peerId123', data: xxx}
 
 auto: 'disconnecting'
