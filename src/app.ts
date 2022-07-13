@@ -27,7 +27,7 @@ const maybeJoinIn = (socket: Socket) =>(room: RoomName): O.Option<Outbound<unkno
   pipe(
     O.some(room),
     O.filter((room) => !socket.rooms.has(room)),
-    O.map(peek<string>(socket.join)),
+    O.map(peek<string>((room: RoomName) => socket.join(room))),
     O.map(toJoinedMsg),
   );
 
