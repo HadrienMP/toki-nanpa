@@ -5,6 +5,9 @@ import { flow, pipe } from 'fp-ts/lib/function';
 import * as O from 'fp-ts/Option';
 import http from 'http';
 import { Server, Socket } from 'socket.io';
+import showdown from 'showdown';
+import showdownHighlight from 'showdown-highlight';
+import path from 'path';
 import {
   InboundC, InDirectMessageC,
   Outbound,
@@ -17,12 +20,25 @@ import {
   toMsg as toOutbound
 } from './protocol';
 import { peek } from './utils';
+import { readFileSync } from 'fs';
+import mustache from 'mustache';
+
+
+const converter = new showdown.Converter({extensions: [showdownHighlight()]});
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' } });
 
-app.get('/', (_, res) => res.send('Welcome to toki nanpa ! Work in progress'));
+
+app.get('/', (_, res) => {
+  const rootFolder = path.dirname(path.dirname(__filename));
+  const markdown = readFileSync(path.join(rootFolder, 'README.md'), { encoding: 'utf8', flag: 'r' } );
+  const htmlReadme = converter.makeHtml(markdown);
+  const template = readFileSync(path.join(rootFolder, 'public/index.html'), { encoding: 'utf8', flag: 'r' } );
+  const body = mustache.render(template, {data: htmlReadme});
+  return res.send( body );
+});
 
 const maybeJoinIn = (socket: Socket) =>(room: RoomName): O.Option<Outbound<unknown>> =>
   pipe(
