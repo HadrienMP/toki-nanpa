@@ -13,8 +13,8 @@ Protocol
 --------
 ```
 ===> 'message', {room: 'room name', data: xxx}
-<=== 'message', {type: 'joined', room: 'room name', peer: 'socket id', data: {}}
-<=== 'message', {type: 'message', room: 'room name', peer: 'socket id', data: xxx}
+<=== 'message', {type: 'joined', room: 'room name', from: 'socket id', data: {}}
+<=== 'message', {type: 'message', room: 'room name', from: 'socket id', data: xxx}
 
 ===> 'direct-message', {to: 'socket id', data: xxx}
 <=== 'direct-message', {to: 'socket id', from: 'other socket id', data: xxx}
