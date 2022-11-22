@@ -14,6 +14,7 @@ Protocol
 ```
 ===> 'join', {room: 'room name'}
 <=== 'message', {type: 'joined', room: 'room name', from: 'socket id', data: {}}
+<=== 'history', {room: 'room name', data: []}
 
 ===> 'message', {room: 'room name', data: xxx}
 <=== 'message', {type: 'joined', room: 'room name', from: 'socket id', data: {}}

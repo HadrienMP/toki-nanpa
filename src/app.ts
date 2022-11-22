@@ -16,6 +16,7 @@ import {
   sendDirectMessageWith,
   sendErrorWith,
   sendMessageWith,
+  toHistoryMsg,
   toJoinedMsg,
   toLeftMsg,
   toMsg as toOutbound
@@ -31,6 +32,12 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' } });
 
+type RoomHistory = Outbound<any>[]
+const history: Record<RoomName, RoomHistory> = {};
+const historize = (room: RoomName) => (messages: Outbound<any>[]) => {
+  history[room] = [...historyOf(room), ...messages.filter(msg => msg.type !== 'history')];
+}
+const historyOf = (room: RoomName) => history[room] ?? [];
 
 app.get('/', (_, res) => {
   const rootFolder = path.dirname(path.dirname(__filename));
@@ -41,12 +48,14 @@ app.get('/', (_, res) => {
   return res.send( body );
 });
 
-const maybeJoinIn = (socket: Socket) =>(room: RoomName): O.Option<Outbound<unknown>> =>
+const maybeJoinIn = (socket: Socket) => (room: RoomName): Outbound<any>[] =>
   pipe(
     O.some(room),
     O.filter((room) => !socket.rooms.has(room)),
     O.map(peek<string>((room: RoomName) => socket.join(room))),
     O.map(toJoinedMsg),
+    A.fromOption,
+    A.append(toHistoryMsg(room, historyOf(room)) as Outbound<any>)
   );
 
 io.on('connection', (socket) => {
@@ -59,11 +68,14 @@ io.on('connection', (socket) => {
     'join', 
     flow(
       JoinC.decode, 
-      E.mapLeft(JSON.stringify),
-      E.map(join => maybeJoin(join.room)),
-      E.map(E.fromOption(() => "Joining failed")),
-      E.flatten,
-      E.match(sendError, sendMsg)
+      E.map(join => 
+        pipe(
+          maybeJoin(join.room), 
+          peek(historize(join.room)),
+          A.append(toHistoryMsg(join.room, historyOf(join.room)))
+        )
+      ),
+      E.match(sendError, A.map(sendMsg))
     )
   )
   
@@ -71,7 +83,13 @@ io.on('connection', (socket) => {
     'message',
     flow(
       InboundC.decode,
-      E.map((inbound) => pipe(maybeJoin(inbound.room), A.fromOption, A.append(toOutbound(inbound)))),
+      E.map((inbound) => 
+        pipe(
+          maybeJoin(inbound.room), 
+          A.append(toOutbound(inbound)),
+          peek(historize(inbound.room))
+        )
+      ),
       E.match(sendError, A.map(sendMsg))
     )
   );

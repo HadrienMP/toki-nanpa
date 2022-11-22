@@ -18,12 +18,17 @@ export const JoinC = t.type({ room: RoomNameC });
 // ------------------------------------
 
 export type Outbound<T> = {
-  type: 'left' | 'message' | 'joined' | 'direct-message';
+  type: 'left' | 'message' | 'joined' | 'direct-message' | 'history';
   room: RoomName;
   data: T;
 };
 export type OutDirectMessage<T> = { to: PeerId; data: T; };
 
+export const toHistoryMsg = (room: RoomName, history: Outbound<any>[]): Outbound<Outbound<any>[]> => ({
+  type: 'history',
+  room,
+  data: history
+})
 export const toJoinedMsg = (room: RoomName): Outbound<{}> => ({
   type: 'joined',
   room,
