@@ -10,6 +10,7 @@ import showdownHighlight from 'showdown-highlight';
 import path from 'path';
 import {
   InboundC, InDirectMessageC,
+  JoinC,
   Outbound,
   RoomName,
   sendDirectMessageWith,
@@ -53,6 +54,18 @@ io.on('connection', (socket) => {
   const sendError = sendErrorWith(io, socket.id);
   const sendMsg = sendMessageWith(io, socket.id);
   const sendDm = sendDirectMessageWith(io, socket.id);
+
+  socket.on(
+    'join', 
+    flow(
+      JoinC.decode, 
+      E.mapLeft(JSON.stringify),
+      E.map(join => maybeJoin(join.room)),
+      E.map(E.fromOption(() => "Joining failed")),
+      E.flatten,
+      E.match(sendError, sendMsg)
+    )
+  )
   
   socket.on(
     'message',

@@ -11,6 +11,7 @@ export type RoomName = t.TypeOf<typeof RoomNameC>;
 // ------------------------------------
 export const InboundC = t.type({ room: RoomNameC, data: t.unknown });
 export const InDirectMessageC = t.type({to: PeerIdC, data: t.unknown});
+export const JoinC = t.type({ room: RoomNameC });
 
 // ------------------------------------
 // Outbound

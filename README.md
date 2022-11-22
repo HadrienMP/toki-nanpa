@@ -12,6 +12,9 @@ It's a __minimal protocol__ that is usefull to me. It __only transmits the messa
 Protocol
 --------
 ```
+===> 'join', {room: 'room name'}
+<=== 'message', {type: 'joined', room: 'room name', from: 'socket id', data: {}}
+
 ===> 'message', {room: 'room name', data: xxx}
 <=== 'message', {type: 'joined', room: 'room name', from: 'socket id', data: {}}
 <=== 'message', {type: 'message', room: 'room name', from: 'socket id', data: xxx}
