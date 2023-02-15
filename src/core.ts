@@ -1,35 +1,20 @@
+import { Result } from '@sniptt/monads/build';
 import { Brand } from './lib/Brand';
-import { MongoClient, Db, Collection } from 'mongodb';
 
 export interface Persistence {
-  create: (roomData: RoomData) => void;
+  create: (roomData: RoomData) => Result<null, CreateError>;
   // todo il se passe quoi si le room id est faux ?
-  addUser: (room: RoomId, user: User) => RoomData;
+  addUser: (room: RoomId, user: User) => Result<RoomData, AddError>;
   get: (room: RoomId) => RoomData | null;
   // todo il se passe quoi si le room id est faux ?
   historize: (room: RoomId, message: unknown) => RoomData;
 }
-
-export class InMemory implements Persistence {
-  private rooms: Record<RoomId, RoomData> = {};
-  create = (roomData: RoomData) => {
-    this.rooms[roomData.room.id] = roomData;
-  };
-  addUser = (roomId: RoomId, user: User) => {
-    const roomData = this.get(roomId)!;
-    const updated = { ...roomData, connected: [user, ...roomData.connected] };
-    this.rooms[roomId] = updated;
-    return updated;
-  };
-  get = (roomId: RoomId): RoomData | null => {
-    return this.rooms[roomId];
-  };
-  historize = (room: RoomId, message: unknown): RoomData => {
-    const roomData = this.get(room)!;
-    const updated = { ...roomData, history: [...roomData.history, message] };
-    this.rooms[room] = updated;
-    return updated;
-  };
+export enum AddError {
+  UNKNOWN_ROOM = 'UNKNOWN_ROOM',
+  ALREADY_JOINED = 'ALREADY_JOINED'
+}
+export enum CreateError {
+  ALREADY_EXISTS = 'ALREADY_EXISTS'
 }
 
 export class Core {
@@ -37,23 +22,36 @@ export class Core {
   constructor(persistence: Persistence) {
     this.persistence = persistence;
   }
+
   createRoom = (room: Room, creator: User): Response => {
     const roomData = { room: room, connected: [creator], history: [] };
-    this.persistence.create(roomData);
-    const joinedMessage = toJoinedMessage(roomData, creator);
-    this.persistence.historize(room.id, joinedMessage);
-    return {
-      direct: [historyMessage(roomData)],
-      broadcast: [joinedMessage]
-    };
+    return this.persistence.create(roomData).match({
+      ok: () => {
+        const joinedMessage = toJoinedMessage(roomData, creator);
+        this.persistence.historize(room.id, joinedMessage);
+        return {
+          direct: [historyMessage(roomData)],
+          broadcast: [joinedMessage]
+        };
+      },
+      err: sendError
+    });
   };
+
   joinRoom = (roomId: RoomId, user: User): Response => {
-    const upatedRoomData = this.persistence.addUser(roomId, user);
-    return {
-      direct: [historyMessage(upatedRoomData)],
-      broadcast: [toJoinedMessage(upatedRoomData, user)]
-    };
+    return this.persistence.addUser(roomId, user).match({
+      ok: (upatedRoomData) => {
+        const joinedMessage = toJoinedMessage(upatedRoomData, user);
+        this.persistence.historize(roomId, joinedMessage);
+        return {
+          direct: [historyMessage(upatedRoomData)],
+          broadcast: [joinedMessage]
+        };
+      },
+      err: sendError
+    });
   };
+
   shareMessage(message: { roomId: RoomId; content: unknown; sender: User }): Response {
     const updatedRoomData = this.persistence.historize(message.roomId, message.content);
     return {
@@ -68,10 +66,18 @@ export class Core {
       ]
     };
   }
+  getHistory(id: RoomId): Response {
+    return { direct: [historyMessage(this.persistence.get(id)!)], broadcast: [] };
+  }
 }
 
+const sendError = (val: Errors): Response => ({
+  direct: [{ type: DirectResponseType.ERROR, code: val }],
+  broadcast: []
+});
+
 function historyMessage(roomData: RoomData): DirectResponse {
-  return { type: DirectResponseType.HISTORY, room: roomData.room, messages: roomData.history };
+  return { type: DirectResponseType.HISTORY, room: roomData.room, data: roomData.history };
 }
 function toJoinedMessage(roomData: RoomData, user: User): BroadcastMessage {
   return {
@@ -99,9 +105,14 @@ export type RoomData = {
 // Response
 // -----------------------------------
 export enum DirectResponseType {
-  HISTORY = 'history'
+  HISTORY = 'history',
+  ERROR = 'error'
 }
-export type DirectResponse = { type: DirectResponseType.HISTORY; room: Room; messages: unknown[] };
+export type Errors = AddError | CreateError;
+export type DirectResponse =
+  | { type: DirectResponseType.HISTORY; room: Room; data: unknown[] }
+  | { type: DirectResponseType.ERROR; code: Errors };
+
 export enum BroadcastMessageType {
   JOINED = 'joined',
   MESSAGE = 'message'

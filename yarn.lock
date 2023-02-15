@@ -565,6 +565,11 @@
   dependencies:
     "@sinonjs/commons" "^2.0.0"
 
+"@sniptt/monads@^0.5.10":
+  "integrity" "sha512-+agDOv9DpDV+9e2zN/Vmdk+XaqGx5Sykl0fqhqgiJ90r18nsBkxe44DmZ2sA1HYK+MSsBeZBiAr6pq4w+5uhfw=="
+  "resolved" "https://registry.npmjs.org/@sniptt/monads/-/monads-0.5.10.tgz"
+  "version" "0.5.10"
+
 "@types/babel__core@^7.1.14":
   "integrity" "sha512-+n8dL/9GWblDO0iU6eZAwEIJVr5DWigtle+Q6HLOrh/pdbXOhOtqzq8VPPE2zvNJzSKY4vH/z3iT3tn0A3ypiQ=="
   "resolved" "https://registry.npmjs.org/@types/babel__core/-/babel__core-7.20.0.tgz"

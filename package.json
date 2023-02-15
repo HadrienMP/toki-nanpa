@@ -13,6 +13,7 @@
     "test": "jest"
   },
   "dependencies": {
+    "@sniptt/monads": "^0.5.10",
     "express": "^4.18.1",
     "marked": "^4.1.1",
     "mongodb": "^5.0.1",
