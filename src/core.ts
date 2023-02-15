@@ -30,8 +30,8 @@ export class Core {
         const joinedMessage = toJoinedMessage(roomData, creator);
         this.persistence.historize(room.id, joinedMessage);
         return {
-          direct: [historyMessage(roomData)],
-          broadcast: [joinedMessage]
+          direct: historyMessage(roomData),
+          broadcast: joinedMessage
         };
       },
       err: sendError
@@ -44,8 +44,8 @@ export class Core {
         const joinedMessage = toJoinedMessage(upatedRoomData, user);
         this.persistence.historize(roomId, joinedMessage);
         return {
-          direct: [historyMessage(upatedRoomData)],
-          broadcast: [joinedMessage]
+          direct: historyMessage(upatedRoomData),
+          broadcast: joinedMessage
         };
       },
       err: sendError
@@ -55,25 +55,23 @@ export class Core {
   shareMessage(message: { roomId: RoomId; content: unknown; sender: User }): Response {
     const updatedRoomData = this.persistence.historize(message.roomId, message.content);
     return {
-      direct: [],
-      broadcast: [
-        {
-          type: BroadcastMessageType.MESSAGE,
-          room: updatedRoomData.room.id,
-          from: message.sender,
-          data: message.content
-        }
-      ]
+      direct: null,
+      broadcast: {
+        type: BroadcastMessageType.MESSAGE,
+        room: updatedRoomData.room.id,
+        from: message.sender,
+        data: message.content
+      }
     };
   }
   getHistory(id: RoomId): Response {
-    return { direct: [historyMessage(this.persistence.get(id)!)], broadcast: [] };
+    return { direct: historyMessage(this.persistence.get(id)!), broadcast: null };
   }
 }
 
 const sendError = (val: Errors): Response => ({
-  direct: [{ type: DirectResponseType.ERROR, code: val }],
-  broadcast: []
+  direct: { type: DirectResponseType.ERROR, code: val },
+  broadcast: null
 });
 
 function historyMessage(roomData: RoomData): DirectResponse {
@@ -124,4 +122,4 @@ export type BroadcastMessage = {
   | { type: BroadcastMessageType.JOINED; data: {} }
   | { type: BroadcastMessageType.MESSAGE; data: unknown }
 );
-export type Response = { direct: DirectResponse[]; broadcast: BroadcastMessage[] };
+export type Response = { direct: DirectResponse | null; broadcast: BroadcastMessage | null };

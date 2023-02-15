@@ -21,10 +21,8 @@ describe('core', () => {
       const room = { id: 'my-room' as RoomId, name: 'my-room' as RoomName };
       const response = core.createRoom(room, emmaGoldman);
       expect(response).toEqual({
-        direct: [{ type: DirectResponseType.HISTORY, room, data: [] }],
-        broadcast: [
-          { type: BroadcastMessageType.JOINED, room: room.id, from: emmaGoldman, data: {} }
-        ]
+        direct: { type: DirectResponseType.HISTORY, room, data: [] },
+        broadcast: { type: BroadcastMessageType.JOINED, room: room.id, from: emmaGoldman, data: {} }
       });
     });
     it('sends an error when the already exists', () => {
@@ -32,12 +30,12 @@ describe('core', () => {
       core.createRoom(room, emmaGoldman);
       const response = core.createRoom(room, bettySnyder);
       expect(response).toEqual({
-        direct: [{ type: DirectResponseType.ERROR, code: CreateError.ALREADY_EXISTS }],
-        broadcast: []
+        direct: { type: DirectResponseType.ERROR, code: CreateError.ALREADY_EXISTS },
+        broadcast: null
       });
     });
   });
-  
+
   describe('join', () => {
     it('returns history and broadcast join event', () => {
       // Given
@@ -49,12 +47,12 @@ describe('core', () => {
 
       // Then
       expect(response).toEqual({
-        direct: [
-          { type: DirectResponseType.HISTORY, room: room, data: createRoomResponse.broadcast }
-        ],
-        broadcast: [
-          { type: BroadcastMessageType.JOINED, room: room.id, from: bettySnyder, data: {} }
-        ]
+        direct: {
+          type: DirectResponseType.HISTORY,
+          room: room,
+          data: [createRoomResponse.broadcast]
+        },
+        broadcast: { type: BroadcastMessageType.JOINED, room: room.id, from: bettySnyder, data: {} }
       });
     });
     it('sends the history when joining a room with messages', () => {
@@ -71,16 +69,12 @@ describe('core', () => {
 
       // Then
       expect(response).toEqual({
-        direct: [
-          {
-            type: DirectResponseType.HISTORY,
-            room: room,
-            data: [...createRoomResponse.broadcast, message, message2]
-          }
-        ],
-        broadcast: [
-          { type: BroadcastMessageType.JOINED, room: room.id, from: bettySnyder, data: {} }
-        ]
+        direct: {
+          type: DirectResponseType.HISTORY,
+          room: room,
+          data: [createRoomResponse.broadcast, message, message2]
+        },
+        broadcast: { type: BroadcastMessageType.JOINED, room: room.id, from: bettySnyder, data: {} }
       });
     });
     it('joining a room that does not exist fails', () => {
@@ -89,8 +83,8 @@ describe('core', () => {
 
       // Then
       expect(response).toEqual({
-        direct: [{ type: DirectResponseType.ERROR, code: AddError.UNKNOWN_ROOM }],
-        broadcast: []
+        direct: { type: DirectResponseType.ERROR, code: AddError.UNKNOWN_ROOM },
+        broadcast: null
       });
     });
     it('does nothing when joining a second time', () => {
@@ -104,19 +98,16 @@ describe('core', () => {
 
       // Then
       expect(response).toEqual({
-        direct: [{ type: DirectResponseType.ERROR, code: AddError.ALREADY_JOINED }],
-        broadcast: []
+        direct: { type: DirectResponseType.ERROR, code: AddError.ALREADY_JOINED },
+        broadcast: null
       });
-      // todo est-ce qu'on a besoin de listes ou nullable c'est cool ?
       expect(core.getHistory(room.id)).toEqual({
-        direct: [
-          {
-            type: DirectResponseType.HISTORY,
-            room,
-            data: [...createRoomResponse.broadcast, ...firstJoinResponse.broadcast]
-          }
-        ],
-        broadcast: []
+        direct: {
+          type: DirectResponseType.HISTORY,
+          room,
+          data: [createRoomResponse.broadcast, firstJoinResponse.broadcast]
+        },
+        broadcast: null
       });
     });
   });
@@ -136,15 +127,13 @@ describe('core', () => {
 
     // Then
     expect(response).toEqual({
-      direct: [],
-      broadcast: [
-        {
-          type: BroadcastMessageType.MESSAGE,
-          room: room.id,
-          from: emmaGoldman,
-          data: message.content
-        }
-      ]
+      direct: null,
+      broadcast: {
+        type: BroadcastMessageType.MESSAGE,
+        room: room.id,
+        from: emmaGoldman,
+        data: message.content
+      }
     });
   });
 });
