@@ -1,5 +1,5 @@
 import { MongoClient, Db, Collection } from 'mongodb';
-import { aRoom, bettySnyder, emmaGoldman } from './fixtures';
+import { bettySnyder, emmaGoldman } from './fixtures';
 
 const uri = `mongodb://localhost:27017`;
 
@@ -17,22 +17,22 @@ describe('MongoDb', () => {
     await client.close();
   });
   it('can delete all the documents in a collection', async () => {
-    await collection?.insertOne({ ...aRoom(), name: '' });
+    await collection?.insertOne({ id: 'hello' });
     await collection?.deleteMany({});
     const count = await collection?.estimatedDocumentCount();
     expect(count).toEqual(0);
   });
   it('can add and remove users in room', async () => {
-    const roomData = aRoom();
+    const roomData = { id: 'hello', users: [] };
     await collection?.insertOne(roomData);
     await collection?.updateOne(
-      { 'room.id': roomData.room.id },
+      { id: roomData.id },
       { $push: { users: { $each: [bettySnyder, emmaGoldman] } } }
     );
-    let savedRoom = await collection?.findOne({ 'room.id': roomData.room.id });
+    let savedRoom = await collection?.findOne({ id: roomData.id });
     expect(savedRoom?.users).toEqual([bettySnyder, emmaGoldman]);
-    await collection?.updateOne({ 'room.id': roomData.room.id }, { $pull: { users: bettySnyder } });
-    savedRoom = await collection?.findOne({ 'room.id': roomData.room.id });
+    await collection?.updateOne({ id: roomData.id }, { $pull: { users: bettySnyder } });
+    savedRoom = await collection?.findOne({ id: roomData.id });
     expect(savedRoom?.users).toEqual([emmaGoldman]);
   });
 });

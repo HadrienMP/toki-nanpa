@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@sniptt/monads": "^0.5.10",
+    "elm-decoders": "^6.1.2",
     "express": "^4.18.1",
     "marked": "^4.1.1",
     "mongodb": "^5.0.1",

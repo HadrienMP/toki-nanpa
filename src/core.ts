@@ -1,79 +1,72 @@
-import { Result } from '@sniptt/monads/build';
 import { Brand } from './lib/Brand';
-
-export interface Persistence {
-  create: (roomData: RoomData) => Result<RoomData, ErrorCode>;
-  addUser: (room: RoomId, user: User) => Result<RoomData, ErrorCode>;
-  get: (room: RoomId) => RoomData | null;
-  historize: (room: RoomId, message: unknown) => Result<RoomData, ErrorCode>;
-}
-export enum ErrorCode {
-  UNKNOWN_ROOM = 'UNKNOWN_ROOM',
-  ALREADY_JOINED = 'ALREADY_JOINED',
-  ALREADY_CREATED = 'ALREADY_CREATED'
-}
+import { Histories, HistoryError } from './histories/Histories';
+import { RoomManager, RoomManagerError } from './roomManager/RoomManager';
+export type ErrorCode = RoomManagerError | HistoryError | 'DECODING_FAILED';
 
 export class Core {
-  private readonly persistence;
-  constructor(persistence: Persistence) {
-    this.persistence = persistence;
+  private readonly histories;
+  private readonly roomManager;
+  constructor(histories: Histories, roomManager: RoomManager) {
+    this.histories = histories;
+    this.roomManager = roomManager;
   }
 
-  createRoom = (room: Room, creator: User): Response => {
-    return this.persistence.create({ room: room, connected: [creator], history: [] }).match({
-      ok: this.sendJoinMessages(creator),
+  joinRoom = (roomId: RoomId, user: User): Response => {
+    const joinResult = this.roomManager.join(roomId, user);
+    if (joinResult === 'Already joined') return emptyResponse;
+    let history = this.histories.get(roomId);
+    if (!history) this.histories.create(roomId);
+    return this.sendJoinMessages(roomId, this.histories.get(roomId), user);
+  };
+
+  shareMessage = (message: { roomId: RoomId; content: unknown; sender: User }): Response => {
+    const joinResponse = this.joinRoom(message.roomId, message.sender);
+    return this.histories.historize(message.roomId, message.content).match({
+      ok: (_) => ({
+        direct: joinResponse.direct,
+        broadcast: [
+          ...joinResponse.broadcast,
+          {
+            type: BroadcastMessageType.MESSAGE,
+            room: message.roomId,
+            from: message.sender,
+            data: message.content
+          }
+        ]
+      }),
       err: sendError
     });
   };
 
-  joinRoom = (roomId: RoomId, user: User): Response =>
-    this.persistence.addUser(roomId, user).match({
-      ok: this.sendJoinMessages(user),
-      err: sendError
-    });
-
-  shareMessage = (message: { roomId: RoomId; content: unknown; sender: User }): Response =>
-    this.persistence.historize(message.roomId, message.content).match({
-      ok: (updatedRoomData) => ({
-        direct: null,
-        broadcast: {
-          type: BroadcastMessageType.MESSAGE,
-          room: updatedRoomData.room.id,
-          from: message.sender,
-          data: message.content
-        }
-      }),
-      err: sendError
-    });
-
   getHistory = (id: RoomId): Response => ({
-    direct: historyMessage(this.persistence.get(id)!),
-    broadcast: null
+    direct: historyMessage(id, this.histories.get(id)),
+    broadcast: []
   });
 
-  private sendJoinMessages = (joined: User) => (roomData: RoomData) => {
-    const joinedMessage = toJoinedMessage(roomData, joined);
-    this.persistence.historize(roomData.room.id, joinedMessage);
+  private sendJoinMessages = (roomId: RoomId, history: History, joined: User): Response => {
+    // todo il se passe quoi quand on join 2 fois ?
+    const joinedMessage = toJoinedMessage(roomId, joined);
+    this.histories.historize(roomId, joinedMessage);
     return {
-      direct: historyMessage(roomData),
-      broadcast: joinedMessage
+      direct: historyMessage(roomId, history),
+      broadcast: [joinedMessage]
     };
   };
 }
 const sendError = (val: ErrorCode): Response => ({
-  direct: { type: DirectResponseType.ERROR, code: val },
-  broadcast: null
+  direct: { type: DirectResponseType.ERROR, code: val, message: val },
+  broadcast: []
 });
 
-const historyMessage = (roomData: RoomData): DirectResponse => ({
+const historyMessage = (roomId: RoomId, history: History): DirectResponse => ({
   type: DirectResponseType.HISTORY,
-  room: roomData.room,
-  data: roomData.history
+  room: roomId,
+  data: history
 });
 
-const toJoinedMessage = (roomData: RoomData, user: User): BroadcastMessage => ({
+const toJoinedMessage = (room: RoomId, user: User): BroadcastMessage => ({
   type: BroadcastMessageType.JOINED,
-  room: roomData.room.id,
+  room: room,
   from: user,
   data: {}
 });
@@ -84,13 +77,6 @@ const toJoinedMessage = (roomData: RoomData, user: User): BroadcastMessage => ({
 export type RoomId = Brand<string, 'RoomId'>;
 export type RoomName = Brand<string, 'RoomName'>;
 export type User = Brand<string, 'User'>;
-
-export type Room = { id: RoomId; name: RoomName };
-export type RoomData = {
-  room: Room;
-  connected: User[];
-  history: unknown[];
-};
 // -----------------------------------
 // Response
 // -----------------------------------
@@ -98,9 +84,11 @@ export enum DirectResponseType {
   HISTORY = 'history',
   ERROR = 'error'
 }
+export type History = unknown[];
+
 export type DirectResponse =
-  | { type: DirectResponseType.HISTORY; room: Room; data: unknown[] }
-  | { type: DirectResponseType.ERROR; code: ErrorCode };
+  | { type: DirectResponseType.HISTORY; room: RoomId; data: History }
+  | { type: DirectResponseType.ERROR; code: ErrorCode; message: string };
 
 export enum BroadcastMessageType {
   JOINED = 'joined',
@@ -113,4 +101,5 @@ export type BroadcastMessage = {
   | { type: BroadcastMessageType.JOINED; data: {} }
   | { type: BroadcastMessageType.MESSAGE; data: unknown }
 );
-export type Response = { direct: DirectResponse | null; broadcast: BroadcastMessage | null };
+export type Response = { direct: DirectResponse | null; broadcast: BroadcastMessage[] };
+const emptyResponse: Response = { direct: null, broadcast: [] };

@@ -1,17 +1,26 @@
-import * as t from 'io-ts';
+import { Err, Ok, Result } from '@sniptt/monads/build';
 import { Server } from 'socket.io';
-
-const PeerIdC = t.string;
-export type PeerId = t.TypeOf<typeof PeerIdC>;
-const RoomNameC = t.string;
-export type RoomName = t.TypeOf<typeof RoomNameC>;
+import { Decoder } from 'elm-decoders';
+import { RoomId, User } from './core';
 
 // ------------------------------------
 // Inbound
 // ------------------------------------
-export const InboundC = t.type({ room: RoomNameC, data: t.unknown });
-export const InDirectMessageC = t.type({to: PeerIdC, data: t.unknown});
-export const JoinC = t.type({ room: RoomNameC });
+export type Inbound = { roomId: RoomId; data: unknown };
+const rommIdDecoder = Decoder.string.map((it) => it as RoomId);
+export const inboundDecoder: Decoder<Inbound> = Decoder.object({
+  roomId: rommIdDecoder,
+  data: Decoder.any
+});
+export type InDirectMessage = { to: User; data: unknown };
+export const inDirectMessageDecoder: Decoder<InDirectMessage> = Decoder.object({
+  to: Decoder.string.map((it) => it as User),
+  data: Decoder.any
+});
+export type Join = { roomId: RoomId };
+export const joinDecoder: Decoder<Join> = Decoder.object({
+  roomId: rommIdDecoder
+});
 
 // ------------------------------------
 // Outbound
@@ -19,32 +28,35 @@ export const JoinC = t.type({ room: RoomNameC });
 
 export type Outbound<T> = {
   type: 'left' | 'message' | 'joined' | 'direct-message' | 'history';
-  room: RoomName;
+  room: RoomId;
   data: T;
 };
-export type OutDirectMessage<T> = { to: PeerId; data: T; };
+export type OutDirectMessage<T> = { to: User; data: T };
 
-export const toHistoryMsg = (room: RoomName, history: Outbound<any>[]): Outbound<Outbound<any>[]> => ({
+export const toHistoryMsg = (
+  room: RoomId,
+  history: Outbound<any>[]
+): Outbound<Outbound<any>[]> => ({
   type: 'history',
   room,
   data: history
-})
-export const toJoinedMsg = (room: RoomName): Outbound<{}> => ({
+});
+export const toJoinedMsg = (room: RoomId): Outbound<{}> => ({
   type: 'joined',
   room,
   data: {}
 });
-export const toLeftMsg = (room: RoomName): Outbound<{}> => ({
+export const toLeftMsg = (room: RoomId): Outbound<{}> => ({
   type: 'left',
   room,
   data: {}
 });
-export const toMsg = <T>(params: { room: RoomName; data: T }): Outbound<T> => ({
+export const toMsg = <T>(params: { room: RoomId; data: T }): Outbound<T> => ({
   type: 'message',
   room: params.room,
   data: params.data
 });
-export const toDirectMessage = <T>(params: { peer: PeerId; data: T }): OutDirectMessage<T> => ({
+export const toDirectMessage = <T>(params: { peer: User; data: T }): OutDirectMessage<T> => ({
   to: params.peer,
   data: params.data
 });
@@ -54,19 +66,19 @@ export const toDirectMessage = <T>(params: { peer: PeerId; data: T }): OutDirect
 // ------------------------------------
 
 export const sendMessageWith =
-  (io: Server, peer: PeerId) =>
+  (io: Server, peer: User) =>
   (message: Outbound<any>): void => {
     io.to(message.room).emit('message', { ...message, from: peer });
   };
 
 export const sendDirectMessageWith =
-  (io: Server, peer: PeerId) =>
+  (io: Server, peer: User) =>
   (message: OutDirectMessage<any>): void => {
     io.to(message.to).emit('direct-message', { ...message, from: peer });
   };
 
 export const sendErrorWith =
-  (io: Server, peer: PeerId) =>
+  (io: Server, peer: User) =>
   (e: any): void => {
     console.error(peer, { e });
     io.to(peer).emit('error', e);

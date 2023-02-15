@@ -1,125 +1,112 @@
-import {
-  BroadcastMessageType,
-  Core,
-  DirectResponseType,
-  ErrorCode,
-  RoomId,
-  RoomName
-} from '../src/core';
-import { InMemory } from './persistence/InMemory';
+import { BroadcastMessageType, Core, DirectResponseType, RoomId, RoomName } from '../src/core';
+import { InMemory } from '../src/histories/InMemory';
 import { bettySnyder, emmaGoldman } from './fixtures';
+import { FakeRoomManager } from './roomManager/FakeRoomManager';
 
 describe('core', () => {
   const persistence = new InMemory();
-  const core = new Core(persistence);
+  const roomManager = new FakeRoomManager();
+  const core = new Core(persistence, roomManager);
   beforeEach(persistence.flush);
-
-  describe('create room', () => {
-    it('acknowledges with empty history and join broadcast', () => {
-      const room = { id: 'my-room' as RoomId, name: 'my-room' as RoomName };
-      const response = core.createRoom(room, emmaGoldman);
-      expect(response).toEqual({
-        direct: { type: DirectResponseType.HISTORY, room, data: [] },
-        broadcast: { type: BroadcastMessageType.JOINED, room: room.id, from: emmaGoldman, data: {} }
-      });
-    });
-    it('sends an error when the already exists', () => {
-      const room = { id: 'my-room' as RoomId, name: 'my-room' as RoomName };
-      core.createRoom(room, emmaGoldman);
-      const response = core.createRoom(room, bettySnyder);
-      expect(response).toEqual({
-        direct: { type: DirectResponseType.ERROR, code: ErrorCode.ALREADY_CREATED },
-        broadcast: null
-      });
-    });
-  });
+  beforeEach(roomManager.flush);
 
   describe('join', () => {
     it('returns history and broadcast join event', () => {
       // Given
-      const room = { id: 'my-room' as RoomId, name: 'my-room' as RoomName };
-      const createRoomResponse = core.createRoom(room, emmaGoldman);
+      const roomId = 'my-room' as RoomId;
 
       // When
-      const response = core.joinRoom(room.id, bettySnyder);
+      const response = core.joinRoom(roomId, bettySnyder);
 
       // Then
       expect(response).toEqual({
         direct: {
           type: DirectResponseType.HISTORY,
-          room: room,
-          data: [createRoomResponse.broadcast]
+          room: roomId,
+          data: []
         },
-        broadcast: { type: BroadcastMessageType.JOINED, room: room.id, from: bettySnyder, data: {} }
+        broadcast: [
+          { type: BroadcastMessageType.JOINED, room: roomId, from: bettySnyder, data: {} }
+        ]
       });
     });
     it('sends the history when joining a room with messages', () => {
       // Given
-      const room = { id: 'my-room' as RoomId, name: 'my-room' as RoomName };
-      const createRoomResponse = core.createRoom(room, emmaGoldman);
+      const roomId = 'my-room' as RoomId;
+      const joinResponse = core.joinRoom(roomId, emmaGoldman);
       const message = 'If voting changed anything';
-      core.shareMessage({ roomId: room.id, sender: emmaGoldman, content: message });
+      core.shareMessage({ roomId: roomId, sender: emmaGoldman, content: message });
       const message2 = `they'd make it illegal`;
-      core.shareMessage({ roomId: room.id, sender: emmaGoldman, content: message2 });
+      core.shareMessage({ roomId: roomId, sender: emmaGoldman, content: message2 });
 
       // When
-      const response = core.joinRoom(room.id, bettySnyder);
+      const response = core.joinRoom(roomId, bettySnyder);
 
       // Then
       expect(response).toEqual({
         direct: {
           type: DirectResponseType.HISTORY,
-          room: room,
-          data: [createRoomResponse.broadcast, message, message2]
+          room: roomId,
+          data: [...joinResponse.broadcast, message, message2]
         },
-        broadcast: { type: BroadcastMessageType.JOINED, room: room.id, from: bettySnyder, data: {} }
+        broadcast: [
+          { type: BroadcastMessageType.JOINED, room: roomId, from: bettySnyder, data: {} }
+        ]
       });
     });
-    it('joining a room that does not exist fails', () => {
+    it('joining a room that does not exist creates it', () => {
       // When
-      const response = core.joinRoom('what room now ?' as RoomId, bettySnyder);
+      const roomId = 'ma-room' as RoomId;
+      const response = core.joinRoom(roomId, bettySnyder);
 
       // Then
       expect(response).toEqual({
-        direct: { type: DirectResponseType.ERROR, code: ErrorCode.UNKNOWN_ROOM },
-        broadcast: null
+        direct: {
+          type: DirectResponseType.HISTORY,
+          room: roomId,
+          data: []
+        },
+        broadcast: [
+          { type: BroadcastMessageType.JOINED, room: roomId, from: bettySnyder, data: {} }
+        ]
       });
     });
     it('does nothing when joining a second time', () => {
       // Given
-      const room = { id: 'my-room' as RoomId, name: 'my-room' as RoomName };
-      const createRoomResponse = core.createRoom(room, emmaGoldman);
-      const firstJoinResponse = core.joinRoom(room.id, bettySnyder);
+      const roomId = 'my-room' as RoomId;
+      const firstJoinResponse = core.joinRoom(roomId, bettySnyder);
 
       // When
-      const response = core.joinRoom(room.id, bettySnyder);
+      const response = core.joinRoom(roomId, bettySnyder);
 
       // Then
       expect(response).toEqual({
-        direct: { type: DirectResponseType.ERROR, code: ErrorCode.ALREADY_JOINED },
-        broadcast: null
+        direct: null,
+        broadcast: []
       });
-      expect(core.getHistory(room.id)).toEqual({
+      expect(core.getHistory(roomId)).toEqual({
         direct: {
           type: DirectResponseType.HISTORY,
-          room,
-          data: [createRoomResponse.broadcast, firstJoinResponse.broadcast]
+          room: roomId,
+          data: firstJoinResponse.broadcast
         },
-        broadcast: null
+        broadcast: []
       });
     });
   });
+  // todo share message without joining makes you join
 
   describe('messages', () => {
     it('broadcasts them', () => {
       // Given
-      const room = { id: 'my-room' as RoomId, name: 'my-room' as RoomName };
-      core.createRoom(room, emmaGoldman);
+      const roomId = 'my-room' as RoomId;
+      core.joinRoom(roomId, emmaGoldman);
 
       const message = {
-        roomId: room.id,
-        content:
-          'I demand the independence of woman, her right to support herself; to live for herself; to love whomever she pleases, or as many as she pleases. I demand freedom for both sexes, freedom of action, freedom in love and freedom in motherhood.',
+        roomId: roomId,
+        content: `I demand the independence of woman, her right to support herself; 
+        to live for herself; to love whomever she pleases, or as many as she pleases. 
+        I demand freedom for both sexes, freedom of action, freedom in love and freedom in motherhood.`,
         sender: emmaGoldman
       };
       // When
@@ -128,20 +115,21 @@ describe('core', () => {
       // Then
       expect(response).toEqual({
         direct: null,
-        broadcast: {
-          type: BroadcastMessageType.MESSAGE,
-          room: room.id,
-          from: emmaGoldman,
-          data: message.content
-        }
+        broadcast: [
+          {
+            type: BroadcastMessageType.MESSAGE,
+            room: roomId,
+            from: emmaGoldman,
+            data: message.content
+          }
+        ]
       });
     });
-    it('sends an error for messages in a room that does not exists', () => {
+    it('joins the room when sharing a message', () => {
+      const roomId = 'what room now ?' as RoomId;
       const message = {
-        roomId: 'what room now ?' as RoomId,
-        content: `I demand the independence of woman, her right to support herself; 
-          to live for herself; to love whomever she pleases, or as many as she pleases. 
-          I demand freedom for both sexes, freedom of action, freedom in love and freedom in motherhood.`,
+        roomId: roomId,
+        content: `Liberty will not descend to a people, a people must raise themselves to liberty`,
         sender: emmaGoldman
       };
       // When
@@ -149,8 +137,20 @@ describe('core', () => {
 
       // Then
       expect(response).toEqual({
-        direct: { type: DirectResponseType.ERROR, code: ErrorCode.UNKNOWN_ROOM },
-        broadcast: null
+        direct: {
+          type: DirectResponseType.HISTORY,
+          room: roomId,
+          data: []
+        },
+        broadcast: [
+          { type: BroadcastMessageType.JOINED, room: roomId, from: emmaGoldman, data: {} },
+          {
+            type: BroadcastMessageType.MESSAGE,
+            room: roomId,
+            from: emmaGoldman,
+            data: message.content
+          }
+        ]
       });
     });
   });
