@@ -20,7 +20,7 @@ describe('core', () => {
 
       // Then
       expect(response).toEqual({
-        direct: {
+        response: {
           type: DirectResponseType.HISTORY,
           room: roomId,
           data: []
@@ -44,7 +44,7 @@ describe('core', () => {
 
       // Then
       expect(response).toEqual({
-        direct: {
+        response: {
           type: DirectResponseType.HISTORY,
           room: roomId,
           data: [...joinResponse.broadcast, message, message2]
@@ -61,7 +61,7 @@ describe('core', () => {
 
       // Then
       expect(response).toEqual({
-        direct: {
+        response: {
           type: DirectResponseType.HISTORY,
           room: roomId,
           data: []
@@ -81,11 +81,11 @@ describe('core', () => {
 
       // Then
       expect(response).toEqual({
-        direct: null,
+        response: null,
         broadcast: []
       });
       expect(core.getHistory(roomId)).toEqual({
-        direct: {
+        response: {
           type: DirectResponseType.HISTORY,
           room: roomId,
           data: firstJoinResponse.broadcast
@@ -114,7 +114,7 @@ describe('core', () => {
 
       // Then
       expect(response).toEqual({
-        direct: null,
+        response: null,
         broadcast: [
           {
             type: BroadcastMessageType.MESSAGE,
@@ -137,7 +137,7 @@ describe('core', () => {
 
       // Then
       expect(response).toEqual({
-        direct: {
+        response: {
           type: DirectResponseType.HISTORY,
           room: roomId,
           data: []

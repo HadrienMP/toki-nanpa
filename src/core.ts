@@ -11,19 +11,19 @@ export class Core {
     this.roomManager = roomManager;
   }
 
-  joinRoom = (roomId: RoomId, user: User): Response => {
+  joinRoom = (roomId: RoomId, user: User): Messages => {
     const joinResult = this.roomManager.join(roomId, user);
-    if (joinResult === 'Already joined') return emptyResponse;
+    if (joinResult === 'Already joined') return noMessages;
     let history = this.histories.get(roomId);
     if (!history) this.histories.create(roomId);
     return this.sendJoinMessages(roomId, this.histories.get(roomId), user);
   };
 
-  shareMessage = (message: { roomId: RoomId; content: unknown; sender: User }): Response => {
+  shareMessage = (message: { roomId: RoomId; content: unknown; sender: User }): Messages => {
     const joinResponse = this.joinRoom(message.roomId, message.sender);
     return this.histories.historize(message.roomId, message.content).match({
       ok: (_) => ({
-        direct: joinResponse.direct,
+        response: joinResponse.response,
         broadcast: [
           ...joinResponse.broadcast,
           {
@@ -38,23 +38,22 @@ export class Core {
     });
   };
 
-  getHistory = (id: RoomId): Response => ({
-    direct: historyMessage(id, this.histories.get(id)),
+  getHistory = (id: RoomId): Messages => ({
+    response: historyMessage(id, this.histories.get(id)),
     broadcast: []
   });
 
-  private sendJoinMessages = (roomId: RoomId, history: History, joined: User): Response => {
-    // todo il se passe quoi quand on join 2 fois ?
+  private sendJoinMessages = (roomId: RoomId, history: History, joined: User): Messages => {
     const joinedMessage = toJoinedMessage(roomId, joined);
     this.histories.historize(roomId, joinedMessage);
     return {
-      direct: historyMessage(roomId, history),
+      response: historyMessage(roomId, history),
       broadcast: [joinedMessage]
     };
   };
 }
-const sendError = (val: ErrorCode): Response => ({
-  direct: { type: DirectResponseType.ERROR, code: val, message: val },
+const sendError = (val: ErrorCode): Messages => ({
+  response: { type: DirectResponseType.ERROR, code: val, message: val },
   broadcast: []
 });
 
@@ -101,5 +100,5 @@ export type BroadcastMessage = {
   | { type: BroadcastMessageType.JOINED; data: {} }
   | { type: BroadcastMessageType.MESSAGE; data: unknown }
 );
-export type Response = { direct: DirectResponse | null; broadcast: BroadcastMessage[] };
-const emptyResponse: Response = { direct: null, broadcast: [] };
+export type Messages = { response: DirectResponse | null; broadcast: BroadcastMessage[] };
+const noMessages: Messages = { response: null, broadcast: [] };

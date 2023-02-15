@@ -29,7 +29,7 @@ import { readFileSync } from 'fs';
 import mustache from 'mustache';
 import { Err, Ok, Result } from '@sniptt/monads/build';
 import { Errors } from 'io-ts';
-import { Core, DirectResponseType, ErrorCode, Response, RoomId, User } from './core';
+import { Core, DirectResponseType, ErrorCode, Messages, RoomId, User } from './core';
 import { InMemory } from './histories/InMemory';
 import { parse } from './lib/DecoderExtra';
 
@@ -71,10 +71,10 @@ io.on('connection', (socket) => {
   const sendDm = sendDirectMessageWith(io, user);
 
   socket.on('join', (data) => {
-    const { direct, broadcast } = parse({ raw: data, decoder: joinDecoder }).match<Response>({
+    const { response: direct, broadcast } = parse({ raw: data, decoder: joinDecoder }).match<Messages>({
       ok: (join) => core.joinRoom(join.roomId, user),
       err: (message) => ({
-        direct: { type: DirectResponseType.ERROR, code: ErrorCode.DECODING_FAILED, message },
+        response: { type: DirectResponseType.ERROR, code: ErrorCode.DECODING_FAILED, message },
         broadcast: null
       })
     });
