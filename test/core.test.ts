@@ -6,7 +6,7 @@ import {
   RoomId,
   RoomName
 } from '../src/core';
-import { InMemory } from './InMemory';
+import { InMemory } from './persistence/InMemory';
 import { bettySnyder, emmaGoldman } from './fixtures';
 
 describe('core', () => {

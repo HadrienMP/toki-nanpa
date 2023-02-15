@@ -1,5 +1,5 @@
 import { Err, Ok, Result } from '@sniptt/monads/build';
-import { Persistence, RoomId, RoomData, User, ErrorCode } from '../src/core';
+import { Persistence, RoomId, RoomData, User, ErrorCode } from '../core';
 
 export class InMemory implements Persistence {
   private rooms: Record<RoomId, RoomData> = {};
