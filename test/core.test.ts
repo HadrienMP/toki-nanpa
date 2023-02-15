@@ -1,10 +1,8 @@
 import {
-  AddError,
   BroadcastMessageType,
   Core,
-  CreateError,
   DirectResponseType,
-  Errors,
+  ErrorCode,
   RoomId,
   RoomName
 } from '../src/core';
@@ -30,7 +28,7 @@ describe('core', () => {
       core.createRoom(room, emmaGoldman);
       const response = core.createRoom(room, bettySnyder);
       expect(response).toEqual({
-        direct: { type: DirectResponseType.ERROR, code: CreateError.ALREADY_EXISTS },
+        direct: { type: DirectResponseType.ERROR, code: ErrorCode.ALREADY_CREATED },
         broadcast: null
       });
     });
@@ -83,7 +81,7 @@ describe('core', () => {
 
       // Then
       expect(response).toEqual({
-        direct: { type: DirectResponseType.ERROR, code: AddError.UNKNOWN_ROOM },
+        direct: { type: DirectResponseType.ERROR, code: ErrorCode.UNKNOWN_ROOM },
         broadcast: null
       });
     });
@@ -98,7 +96,7 @@ describe('core', () => {
 
       // Then
       expect(response).toEqual({
-        direct: { type: DirectResponseType.ERROR, code: AddError.ALREADY_JOINED },
+        direct: { type: DirectResponseType.ERROR, code: ErrorCode.ALREADY_JOINED },
         broadcast: null
       });
       expect(core.getHistory(room.id)).toEqual({
@@ -112,28 +110,48 @@ describe('core', () => {
     });
   });
 
-  it('broadcasts incoming messages', () => {
-    // Given
-    const room = { id: 'my-room' as RoomId, name: 'my-room' as RoomName };
-    core.createRoom(room, emmaGoldman);
+  describe('messages', () => {
+    it('broadcasts them', () => {
+      // Given
+      const room = { id: 'my-room' as RoomId, name: 'my-room' as RoomName };
+      core.createRoom(room, emmaGoldman);
 
-    const message = {
-      roomId: room.id,
-      content: 'my awesome content',
-      sender: emmaGoldman
-    };
-    // When
-    const response = core.shareMessage(message);
+      const message = {
+        roomId: room.id,
+        content:
+          'I demand the independence of woman, her right to support herself; to live for herself; to love whomever she pleases, or as many as she pleases. I demand freedom for both sexes, freedom of action, freedom in love and freedom in motherhood.',
+        sender: emmaGoldman
+      };
+      // When
+      const response = core.shareMessage(message);
 
-    // Then
-    expect(response).toEqual({
-      direct: null,
-      broadcast: {
-        type: BroadcastMessageType.MESSAGE,
-        room: room.id,
-        from: emmaGoldman,
-        data: message.content
-      }
+      // Then
+      expect(response).toEqual({
+        direct: null,
+        broadcast: {
+          type: BroadcastMessageType.MESSAGE,
+          room: room.id,
+          from: emmaGoldman,
+          data: message.content
+        }
+      });
+    });
+    it('sends an error for messages in a room that does not exists', () => {
+      const message = {
+        roomId: 'what room now ?' as RoomId,
+        content: `I demand the independence of woman, her right to support herself; 
+          to live for herself; to love whomever she pleases, or as many as she pleases. 
+          I demand freedom for both sexes, freedom of action, freedom in love and freedom in motherhood.`,
+        sender: emmaGoldman
+      };
+      // When
+      const response = core.shareMessage(message);
+
+      // Then
+      expect(response).toEqual({
+        direct: { type: DirectResponseType.ERROR, code: ErrorCode.UNKNOWN_ROOM },
+        broadcast: null
+      });
     });
   });
 });
