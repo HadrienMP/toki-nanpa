@@ -1,66 +1,126 @@
 import {
+  AddError,
   BroadcastMessageType,
   Core,
+  CreateError,
   DirectResponseType,
-  InMemory,
+  Errors,
   RoomId,
   RoomName
 } from '../src/core';
+import { InMemory } from './InMemory';
 import { bettySnyder, emmaGoldman } from './fixtures';
 
 describe('core', () => {
   const persistence = new InMemory();
   const core = new Core(persistence);
-  // todo room already exists
-  it('create room', () => {
-    const room = { id: 'my-room' as RoomId, name: 'my-room' as RoomName };
-    const response = core.createRoom(room, emmaGoldman);
-    expect(response).toEqual({
-      direct: [{ type: DirectResponseType.HISTORY, room, messages: [] }],
-      broadcast: [{ type: BroadcastMessageType.JOINED, room: room.id, from: emmaGoldman, data: {} }]
+  beforeEach(persistence.flush);
+
+  describe('create room', () => {
+    it('acknowledges with empty history and join broadcast', () => {
+      const room = { id: 'my-room' as RoomId, name: 'my-room' as RoomName };
+      const response = core.createRoom(room, emmaGoldman);
+      expect(response).toEqual({
+        direct: [{ type: DirectResponseType.HISTORY, room, data: [] }],
+        broadcast: [
+          { type: BroadcastMessageType.JOINED, room: room.id, from: emmaGoldman, data: {} }
+        ]
+      });
+    });
+    it('sends an error when the already exists', () => {
+      const room = { id: 'my-room' as RoomId, name: 'my-room' as RoomName };
+      core.createRoom(room, emmaGoldman);
+      const response = core.createRoom(room, bettySnyder);
+      expect(response).toEqual({
+        direct: [{ type: DirectResponseType.ERROR, code: CreateError.ALREADY_EXISTS }],
+        broadcast: []
+      });
     });
   });
-  // todo already joined
-  // todo messages came in
-  // todo joining a room that does not exist
-  it('join room', () => {
-    // Given
-    const room = { id: 'my-room' as RoomId, name: 'my-room' as RoomName };
-    const createRoomResponse = core.createRoom(room, emmaGoldman);
+  
+  describe('join', () => {
+    it('returns history and broadcast join event', () => {
+      // Given
+      const room = { id: 'my-room' as RoomId, name: 'my-room' as RoomName };
+      const createRoomResponse = core.createRoom(room, emmaGoldman);
 
-    // When
-    const response = core.joinRoom(room.id, bettySnyder);
+      // When
+      const response = core.joinRoom(room.id, bettySnyder);
 
-    // Then
-    expect(response).toEqual({
-      direct: [{ type: DirectResponseType.HISTORY, room: room, messages: createRoomResponse.broadcast }],
-      broadcast: [{ type: BroadcastMessageType.JOINED, room: room.id, from: bettySnyder, data: {} }]
+      // Then
+      expect(response).toEqual({
+        direct: [
+          { type: DirectResponseType.HISTORY, room: room, data: createRoomResponse.broadcast }
+        ],
+        broadcast: [
+          { type: BroadcastMessageType.JOINED, room: room.id, from: bettySnyder, data: {} }
+        ]
+      });
+    });
+    it('sends the history when joining a room with messages', () => {
+      // Given
+      const room = { id: 'my-room' as RoomId, name: 'my-room' as RoomName };
+      const createRoomResponse = core.createRoom(room, emmaGoldman);
+      const message = 'If voting changed anything';
+      core.shareMessage({ roomId: room.id, sender: emmaGoldman, content: message });
+      const message2 = `they'd make it illegal`;
+      core.shareMessage({ roomId: room.id, sender: emmaGoldman, content: message2 });
+
+      // When
+      const response = core.joinRoom(room.id, bettySnyder);
+
+      // Then
+      expect(response).toEqual({
+        direct: [
+          {
+            type: DirectResponseType.HISTORY,
+            room: room,
+            data: [...createRoomResponse.broadcast, message, message2]
+          }
+        ],
+        broadcast: [
+          { type: BroadcastMessageType.JOINED, room: room.id, from: bettySnyder, data: {} }
+        ]
+      });
+    });
+    it('joining a room that does not exist fails', () => {
+      // When
+      const response = core.joinRoom('what room now ?' as RoomId, bettySnyder);
+
+      // Then
+      expect(response).toEqual({
+        direct: [{ type: DirectResponseType.ERROR, code: AddError.UNKNOWN_ROOM }],
+        broadcast: []
+      });
+    });
+    it('does nothing when joining a second time', () => {
+      // Given
+      const room = { id: 'my-room' as RoomId, name: 'my-room' as RoomName };
+      const createRoomResponse = core.createRoom(room, emmaGoldman);
+      const firstJoinResponse = core.joinRoom(room.id, bettySnyder);
+
+      // When
+      const response = core.joinRoom(room.id, bettySnyder);
+
+      // Then
+      expect(response).toEqual({
+        direct: [{ type: DirectResponseType.ERROR, code: AddError.ALREADY_JOINED }],
+        broadcast: []
+      });
+      // todo est-ce qu'on a besoin de listes ou nullable c'est cool ?
+      expect(core.getHistory(room.id)).toEqual({
+        direct: [
+          {
+            type: DirectResponseType.HISTORY,
+            room,
+            data: [...createRoomResponse.broadcast, ...firstJoinResponse.broadcast]
+          }
+        ],
+        broadcast: []
+      });
     });
   });
-  it('sends the history when joining a room with messages', () => {
-    // Given
-    const room = { id: 'my-room' as RoomId, name: 'my-room' as RoomName };
-    const createRoomResponse = core.createRoom(room, emmaGoldman);
-    const message = 'If voting changed anything';
-    core.shareMessage({ roomId: room.id, sender: emmaGoldman, content: message });
-    const message2 = `they'd make it illegal`;
-    core.shareMessage({ roomId: room.id, sender: emmaGoldman, content: message2 });
 
-    // When
-    const response = core.joinRoom(room.id, bettySnyder);
-
-    // Then
-    expect(response).toEqual({
-      direct: [
-        {
-          type: DirectResponseType.HISTORY,
-          room: room,
-          messages: [...createRoomResponse.broadcast, message, message2]
-        }
-      ],
-      broadcast: [{ type: BroadcastMessageType.JOINED, room: room.id, from: bettySnyder, data: {} }]
-    });
-  });
   it('broadcasts incoming messages', () => {
     // Given
     const room = { id: 'my-room' as RoomId, name: 'my-room' as RoomName };
