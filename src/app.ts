@@ -1,6 +1,4 @@
 import express from 'express';
-import * as E from 'fp-ts/Either';
-import { flow } from 'fp-ts/lib/function';
 import http from 'http';
 import { Server } from 'socket.io';
 import showdown from 'showdown';
@@ -8,7 +6,16 @@ import showdownHighlight from 'showdown-highlight';
 import path from 'path';
 import { readFileSync } from 'fs';
 import mustache from 'mustache';
-import { Core, JoinFunction, Messages, RoomId, User } from './core';
+import {
+  Core,
+  JoinFunction,
+  LeaveFunction,
+  Messages,
+  rommIdDecoder,
+  RoomId,
+  RoomsFunction,
+  User
+} from './core';
 import { InMemory } from './histories/InMemory';
 import { parse } from './lib/DecoderExtra';
 import { messageDecoder, joinDecoder, dmDecoder } from './protocol';
@@ -43,6 +50,13 @@ io.on('connection', (socket) => {
     socket.join(roomId);
     return 'OK';
   };
+  const leaveFunction: LeaveFunction = (roomId: RoomId) => {
+    if (!socket.rooms.has(roomId)) return 'Already left';
+    socket.leave(roomId);
+    return 'OK';
+  };
+  const getRooms: RoomsFunction = (_) =>
+    Array.from(socket.rooms.values()).map((it) => it as RoomId);
 
   socket.on('join', (data) => {
     const messages: Messages = parse({ raw: data, decoder: joinDecoder })
@@ -51,14 +65,14 @@ io.on('connection', (socket) => {
     dispatch(messages);
   });
 
-  socket.on('message', (data) => {
-    const messages: Messages = parse({ raw: data, decoder: messageDecoder })
+  socket.on('message', (raw) => {
+    const messages: Messages = parse({ raw, decoder: messageDecoder })
       .map((message) => core.shareMessage(message, user, joinFunction))
       .unwrapOrElse(decodingError(user));
     dispatch(messages);
   });
-  socket.on('direct-message', (data) => {
-    parse({ raw: data, decoder: dmDecoder }).match({
+  socket.on('direct-message', (raw) => {
+    parse({ raw, decoder: dmDecoder }).match({
       ok: (dm) => {
         io.to(dm.to).emit('direct-message', dm);
       },
@@ -67,9 +81,15 @@ io.on('connection', (socket) => {
       }
     });
   });
-  // socket.on('disconnecting', (_) =>
-  //   socket.rooms.forEach(flow((it) => it as RoomId, toLeftMsg, sendMsg))
-  // );
+  socket.on('leave', (raw) => {
+    const messages: Messages = parse({ raw, decoder: rommIdDecoder })
+      .map((room) => core.leave(room, user, leaveFunction))
+      .unwrapOrElse(decodingError(user));
+    dispatch(messages);
+  });
+  socket.on('disconnecting', (_) => {
+    dispatch(core.disconnect(user, getRooms));
+  });
 });
 
 const dispatch = (messages: Messages) => {
