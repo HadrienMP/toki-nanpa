@@ -1,5 +1,5 @@
 import { Brand } from './lib/Brand';
-  import { History, Histories } from './histories/Histories';
+import { History, Histories } from './histories/Histories';
 import { Decoder } from 'elm-decoders';
 import {
   BroadcastMessage,
@@ -8,10 +8,12 @@ import {
   Inbound,
   toErrorResponse,
   toJoinedMessage,
-  toOutBound
+  toOutBound,
+  toLeftMessage
 } from './protocol';
 
 export type JoinFunction = (roomId: RoomId, user: User) => 'OK' | 'Already joined';
+export type LeaveFunction = (roomId: RoomId, user: User) => 'OK' | 'Already left';
 
 export class Core {
   private readonly histories;
@@ -42,6 +44,17 @@ export class Core {
     response: historyMessage(id, user, this.histories.get(id)),
     broadcast: []
   });
+
+  leave = (id: RoomId, user: User, leave: LeaveFunction): Messages => {
+    const leaveResult = leave(id, user);
+    if (leaveResult === 'Already left') return noMessages;
+    const message = toLeftMessage(id, user);
+    this.histories.historize(id, message);
+    return {
+      response: null,
+      broadcast: [message]
+    };
+  };
 
   private sendJoinMessages = (roomId: RoomId, history: History, joined: User): Messages => {
     const joinedMessage = toJoinedMessage(roomId, joined);

@@ -22,6 +22,8 @@ export type Join = { roomId: RoomId };
 export const joinDecoder: Decoder<Join> = Decoder.object({
   roomId: rommIdDecoder
 });
+    // todo add a manual leaving message
+    // todo update protocol
 
 // ------------------------------------
 // Outbound
@@ -36,7 +38,7 @@ export type DirectResponse = { to: User } & (
 export type BroadcastMessage = {
   room: RoomId;
   from: User;
-} & ({ type: 'joined'; data: {} } | { type: 'message'; data: unknown });
+} & ({ type: 'joined' | 'left' } | { type: 'message'; data: unknown });
 
 // ------------------------------------
 // Outbound factories
@@ -62,6 +64,10 @@ export const historyMessage = (roomId: RoomId, user: User, history: History): Di
 export const toJoinedMessage = (room: RoomId, user: User): BroadcastMessage => ({
   type: 'joined',
   room: room,
-  from: user,
-  data: {}
+  from: user
+});
+export const toLeftMessage = (id: RoomId, user: User): BroadcastMessage => ({
+  type: 'left',
+  room: id,
+  from: user
 });
