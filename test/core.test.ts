@@ -1,14 +1,13 @@
 import { BroadcastMessageType, Core, DirectResponseType, RoomId, RoomName } from '../src/core';
 import { InMemory } from '../src/histories/InMemory';
 import { bettySnyder, emmaGoldman } from './fixtures';
-import { FakeRoomManager } from './roomManager/FakeRoomManager';
+import { join as socketJoin, flush as flushSockets } from './fakeSocket';
 
 describe('core', () => {
   const persistence = new InMemory();
-  const roomManager = new FakeRoomManager();
-  const core = new Core(persistence, roomManager);
+  const core = new Core(persistence);
   beforeEach(persistence.flush);
-  beforeEach(roomManager.flush);
+  beforeEach(flushSockets);
 
   describe('join', () => {
     it('returns history and broadcast join event', () => {
@@ -16,14 +15,15 @@ describe('core', () => {
       const roomId = 'my-room' as RoomId;
 
       // When
-      const response = core.joinRoom(roomId, bettySnyder);
+      const response = core.join({ roomId, user: bettySnyder, join: socketJoin });
 
       // Then
       expect(response).toEqual({
         response: {
           type: DirectResponseType.HISTORY,
           room: roomId,
-          data: []
+          data: [],
+          to: bettySnyder
         },
         broadcast: [
           { type: BroadcastMessageType.JOINED, room: roomId, from: bettySnyder, data: {} }
@@ -33,21 +33,22 @@ describe('core', () => {
     it('sends the history when joining a room with messages', () => {
       // Given
       const roomId = 'my-room' as RoomId;
-      const joinResponse = core.joinRoom(roomId, emmaGoldman);
+      const joinResponse = core.join({ roomId, user: emmaGoldman, join: socketJoin });
       const message = 'If voting changed anything';
-      core.shareMessage({ roomId: roomId, sender: emmaGoldman, content: message });
+      core.shareMessage({ roomId: roomId, sender: emmaGoldman, data: message }, socketJoin);
       const message2 = `they'd make it illegal`;
-      core.shareMessage({ roomId: roomId, sender: emmaGoldman, content: message2 });
+      core.shareMessage({ roomId: roomId, sender: emmaGoldman, data: message2 }, socketJoin);
 
       // When
-      const response = core.joinRoom(roomId, bettySnyder);
+      const response = core.join({ roomId, user: bettySnyder, join: socketJoin });
 
       // Then
       expect(response).toEqual({
         response: {
           type: DirectResponseType.HISTORY,
           room: roomId,
-          data: [...joinResponse.broadcast, message, message2]
+          data: [...joinResponse.broadcast, message, message2],
+          to: bettySnyder
         },
         broadcast: [
           { type: BroadcastMessageType.JOINED, room: roomId, from: bettySnyder, data: {} }
@@ -57,14 +58,15 @@ describe('core', () => {
     it('joining a room that does not exist creates it', () => {
       // When
       const roomId = 'ma-room' as RoomId;
-      const response = core.joinRoom(roomId, bettySnyder);
+      const response = core.join({ roomId, user: bettySnyder, join: socketJoin });
 
       // Then
       expect(response).toEqual({
         response: {
           type: DirectResponseType.HISTORY,
           room: roomId,
-          data: []
+          data: [],
+          to: bettySnyder
         },
         broadcast: [
           { type: BroadcastMessageType.JOINED, room: roomId, from: bettySnyder, data: {} }
@@ -74,21 +76,22 @@ describe('core', () => {
     it('does nothing when joining a second time', () => {
       // Given
       const roomId = 'my-room' as RoomId;
-      const firstJoinResponse = core.joinRoom(roomId, bettySnyder);
+      const firstJoinResponse = core.join({ roomId, user: bettySnyder, join: socketJoin });
 
       // When
-      const response = core.joinRoom(roomId, bettySnyder);
+      const response = core.join({ roomId, user: bettySnyder, join: socketJoin });
 
       // Then
       expect(response).toEqual({
         response: null,
         broadcast: []
       });
-      expect(core.getHistory(roomId)).toEqual({
+      expect(core.getHistory(roomId, bettySnyder)).toEqual({
         response: {
           type: DirectResponseType.HISTORY,
           room: roomId,
-          data: firstJoinResponse.broadcast
+          data: firstJoinResponse.broadcast,
+          to: bettySnyder
         },
         broadcast: []
       });
@@ -100,17 +103,17 @@ describe('core', () => {
     it('broadcasts them', () => {
       // Given
       const roomId = 'my-room' as RoomId;
-      core.joinRoom(roomId, emmaGoldman);
+      core.join({ roomId, user: emmaGoldman, join: socketJoin });
 
       const message = {
         roomId: roomId,
-        content: `I demand the independence of woman, her right to support herself; 
+        data: `I demand the independence of woman, her right to support herself; 
         to live for herself; to love whomever she pleases, or as many as she pleases. 
         I demand freedom for both sexes, freedom of action, freedom in love and freedom in motherhood.`,
         sender: emmaGoldman
       };
       // When
-      const response = core.shareMessage(message);
+      const response = core.shareMessage(message, socketJoin);
 
       // Then
       expect(response).toEqual({
@@ -120,27 +123,30 @@ describe('core', () => {
             type: BroadcastMessageType.MESSAGE,
             room: roomId,
             from: emmaGoldman,
-            data: message.content
+            data: message.data
           }
         ]
       });
     });
+    // todo test disconnection
+    // todo test dm
     it('joins the room when sharing a message', () => {
       const roomId = 'what room now ?' as RoomId;
       const message = {
         roomId: roomId,
-        content: `Liberty will not descend to a people, a people must raise themselves to liberty`,
+        data: `Liberty will not descend to a people, a people must raise themselves to liberty`,
         sender: emmaGoldman
       };
       // When
-      const response = core.shareMessage(message);
+      const response = core.shareMessage(message, socketJoin);
 
       // Then
       expect(response).toEqual({
         response: {
           type: DirectResponseType.HISTORY,
           room: roomId,
-          data: []
+          data: [],
+          to: emmaGoldman
         },
         broadcast: [
           { type: BroadcastMessageType.JOINED, room: roomId, from: emmaGoldman, data: {} },
@@ -148,7 +154,7 @@ describe('core', () => {
             type: BroadcastMessageType.MESSAGE,
             room: roomId,
             from: emmaGoldman,
-            data: message.content
+            data: message.data
           }
         ]
       });

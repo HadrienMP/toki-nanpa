@@ -1,27 +1,30 @@
 import { Brand } from './lib/Brand';
 import { Histories, HistoryError } from './histories/Histories';
-import { RoomManager, RoomManagerError } from './roomManager/RoomManager';
-export type ErrorCode = RoomManagerError | HistoryError | 'DECODING_FAILED';
+import { Decoder } from 'elm-decoders';
+export type ErrorCode = HistoryError | 'DECODING_FAILED';
+
+export type JoinFunction = (roomId: RoomId, user: User) => 'OK' | 'Already joined';
 
 export class Core {
   private readonly histories;
-  private readonly roomManager;
-  constructor(histories: Histories, roomManager: RoomManager) {
+  constructor(histories: Histories) {
     this.histories = histories;
-    this.roomManager = roomManager;
   }
 
-  joinRoom = (roomId: RoomId, user: User): Messages => {
-    const joinResult = this.roomManager.join(roomId, user);
+  join = (params: { roomId: RoomId; user: User; join: JoinFunction }): Messages => {
+    const joinResult = params.join(params.roomId, params.user);
     if (joinResult === 'Already joined') return noMessages;
-    let history = this.histories.get(roomId);
-    if (!history) this.histories.create(roomId);
-    return this.sendJoinMessages(roomId, this.histories.get(roomId), user);
+    let history = this.histories.get(params.roomId);
+    if (!history) this.histories.create(params.roomId);
+    return this.sendJoinMessages(params.roomId, this.histories.get(params.roomId), params.user);
   };
 
-  shareMessage = (message: { roomId: RoomId; content: unknown; sender: User }): Messages => {
-    const joinResponse = this.joinRoom(message.roomId, message.sender);
-    return this.histories.historize(message.roomId, message.content).match({
+  shareMessage = (
+    message: { roomId: RoomId; data: unknown; sender: User },
+    join: JoinFunction
+  ): Messages => {
+    const joinResponse = this.join({ roomId: message.roomId, user: message.sender, join });
+    return this.histories.historize(message.roomId, message.data).match({
       ok: (_) => ({
         response: joinResponse.response,
         broadcast: [
@@ -30,16 +33,16 @@ export class Core {
             type: BroadcastMessageType.MESSAGE,
             room: message.roomId,
             from: message.sender,
-            data: message.content
+            data: message.data
           }
         ]
       }),
-      err: sendError
+      err: sendError(message.sender)
     });
   };
 
-  getHistory = (id: RoomId): Messages => ({
-    response: historyMessage(id, this.histories.get(id)),
+  getHistory = (id: RoomId, user: User): Messages => ({
+    response: historyMessage(id, user, this.histories.get(id)),
     broadcast: []
   });
 
@@ -47,20 +50,23 @@ export class Core {
     const joinedMessage = toJoinedMessage(roomId, joined);
     this.histories.historize(roomId, joinedMessage);
     return {
-      response: historyMessage(roomId, history),
+      response: historyMessage(roomId, joined, history),
       broadcast: [joinedMessage]
     };
   };
 }
-const sendError = (val: ErrorCode): Messages => ({
-  response: { type: DirectResponseType.ERROR, code: val, message: val },
-  broadcast: []
-});
+const sendError =
+  (user: User) =>
+  (val: ErrorCode): Messages => ({
+    response: { type: DirectResponseType.ERROR, code: val, message: val, to: user },
+    broadcast: []
+  });
 
-const historyMessage = (roomId: RoomId, history: History): DirectResponse => ({
+const historyMessage = (roomId: RoomId, user: User, history: History): DirectResponse => ({
   type: DirectResponseType.HISTORY,
   room: roomId,
-  data: history
+  data: history,
+  to: user
 });
 
 const toJoinedMessage = (room: RoomId, user: User): BroadcastMessage => ({
@@ -74,6 +80,7 @@ const toJoinedMessage = (room: RoomId, user: User): BroadcastMessage => ({
 // Model
 // -----------------------------------
 export type RoomId = Brand<string, 'RoomId'>;
+export const rommIdDecoder = Decoder.string.map((it) => it as RoomId);
 export type RoomName = Brand<string, 'RoomName'>;
 export type User = Brand<string, 'User'>;
 // -----------------------------------
@@ -85,9 +92,10 @@ export enum DirectResponseType {
 }
 export type History = unknown[];
 
-export type DirectResponse =
+export type DirectResponse = { to: User } & (
   | { type: DirectResponseType.HISTORY; room: RoomId; data: History }
-  | { type: DirectResponseType.ERROR; code: ErrorCode; message: string };
+  | { type: DirectResponseType.ERROR; code: ErrorCode; message: string }
+);
 
 export enum BroadcastMessageType {
   JOINED = 'joined',

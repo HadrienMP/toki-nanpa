@@ -1,19 +1,18 @@
 import { Err, Ok, Result } from '@sniptt/monads/build';
 import { Server } from 'socket.io';
 import { Decoder } from 'elm-decoders';
-import { RoomId, User } from './core';
+import { rommIdDecoder, RoomId, User } from './core';
 
 // ------------------------------------
 // Inbound
 // ------------------------------------
 export type Inbound = { roomId: RoomId; data: unknown };
-const rommIdDecoder = Decoder.string.map((it) => it as RoomId);
-export const inboundDecoder: Decoder<Inbound> = Decoder.object({
+export const messageDecoder: Decoder<Inbound> = Decoder.object({
   roomId: rommIdDecoder,
   data: Decoder.any
 });
 export type InDirectMessage = { to: User; data: unknown };
-export const inDirectMessageDecoder: Decoder<InDirectMessage> = Decoder.object({
+export const dmDecoder: Decoder<InDirectMessage> = Decoder.object({
   to: Decoder.string.map((it) => it as User),
   data: Decoder.any
 });

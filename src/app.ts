@@ -1,50 +1,31 @@
 import express from 'express';
-import * as A from 'fp-ts/Array';
 import * as E from 'fp-ts/Either';
-import { flow, pipe } from 'fp-ts/lib/function';
-import * as O from 'fp-ts/Option';
+import { flow } from 'fp-ts/lib/function';
 import http from 'http';
-import { Server, Socket } from 'socket.io';
+import { Server } from 'socket.io';
 import showdown from 'showdown';
 import showdownHighlight from 'showdown-highlight';
 import path from 'path';
-import {
-  InboundC,
-  InDirectMessageC,
-  Join,
-  JoinC,
-  joinDecoder,
-  Outbound,
-  RoomName,
-  sendDirectMessageWith,
-  sendErrorWith,
-  sendMessageWith,
-  toHistoryMsg,
-  toJoinedMsg,
-  toLeftMsg,
-  toMsg as toOutbound
-} from './protocol';
-import { peek } from './utils';
 import { readFileSync } from 'fs';
 import mustache from 'mustache';
-import { Err, Ok, Result } from '@sniptt/monads/build';
-import { Errors } from 'io-ts';
-import { Core, DirectResponseType, ErrorCode, Messages, RoomId, User } from './core';
+import { Core, DirectResponseType, JoinFunction, Messages, RoomId, User } from './core';
 import { InMemory } from './histories/InMemory';
 import { parse } from './lib/DecoderExtra';
+import {
+  messageDecoder,
+  joinDecoder,
+  toLeftMsg,
+  dmDecoder,
+  sendDirectMessageWith,
+  sendErrorWith,
+  sendMessageWith
+} from './protocol';
 
 const converter = new showdown.Converter({ extensions: [showdownHighlight()] });
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' } });
-
-type RoomHistory = Outbound<any>[];
-const history: Record<RoomName, RoomHistory> = {};
-const historize = (room: RoomName) => (messages: Outbound<any>[]) => {
-  history[room] = [...historyOf(room), ...messages.filter((msg) => msg.type !== 'history')];
-};
-const historyOf = (room: RoomName) => history[room] ?? [];
 
 const core = new Core(new InMemory());
 
@@ -65,48 +46,50 @@ app.get('/', (_, res) => {
 
 io.on('connection', (socket) => {
   const user: User = socket.id as User;
+  const joinFunction: JoinFunction = (roomId: RoomId) => {
+    if (socket.rooms.has(roomId)) return 'Already joined';
+    socket.join(roomId);
+    return 'OK';
+  };
 
   const sendError = sendErrorWith(io, user);
   const sendMsg = sendMessageWith(io, user);
   const sendDm = sendDirectMessageWith(io, user);
 
   socket.on('join', (data) => {
-    const { response: direct, broadcast } = parse({ raw: data, decoder: joinDecoder }).match<Messages>({
-      ok: (join) => core.joinRoom(join.roomId, user),
-      err: (message) => ({
-        response: { type: DirectResponseType.ERROR, code: ErrorCode.DECODING_FAILED, message },
-        broadcast: null
-      })
-    });
-    if (direct) io.to(user).emit('response', direct);
-    if (broadcast) io.to(broadcast.room).emit('message', { ...message, from: peer });
-    return pipe(
-      data,
-      JoinC.decode,
-      E.map((join) =>
-        pipe(
-          maybeJoin(join.room),
-          peek(historize(join.room)),
-          A.append(toHistoryMsg(join.room, historyOf(join.room)))
-        )
-      ),
-      E.match(sendError, A.map(sendMsg))
-    );
+    const messages: Messages = parse({ raw: data, decoder: joinDecoder })
+      .map((joinRequest) => core.join({ roomId: joinRequest.roomId, user, join: joinFunction }))
+      .unwrapOrElse(decodingError(user));
+    dispatch(messages);
   });
 
-  socket.on(
-    'message',
-    flow(
-      InboundC.decode,
-      E.map((inbound) =>
-        pipe(maybeJoin(inbound.room), A.append(toOutbound(inbound)), peek(historize(inbound.room)))
-      ),
-      E.match(sendError, A.map(sendMsg))
-    )
+  socket.on('message', (data) => {
+    const messages: Messages = parse({ raw: data, decoder: messageDecoder })
+      .map((message) => core.shareMessage({ ...message, sender: user }, joinFunction))
+      .unwrapOrElse(decodingError(user));
+    dispatch(messages);
+  });
+  socket.on('direct-message', (data) => {
+    parse({ raw: data, decoder: dmDecoder }).match({
+      ok: sendDm,
+      err: sendError
+    });
+  });
+  socket.on('disconnecting', (_) =>
+    socket.rooms.forEach(flow((it) => it as RoomId, toLeftMsg, sendMsg))
   );
-  socket.on('direct-message', flow(InDirectMessageC.decode, E.match(sendError, sendDm)));
-  socket.on('disconnecting', (_) => socket.rooms.forEach(flow(toLeftMsg, sendMsg)));
 });
 
 const port = process.env.PORT || 9876;
 server.listen(port, () => console.log(`Server started: http://0.0.0.0:${port}`));
+
+const dispatch = (messages: Messages) => {
+  if (messages.response) io.to(messages.response.to).emit('response', messages.response);
+  messages.broadcast.forEach((message) => io.to(message.room).emit('message', message));
+};
+function decodingError(user: User): (err: string) => Messages {
+  return (message) => ({
+    response: { type: DirectResponseType.ERROR, code: 'DECODING_FAILED', message, to: user },
+    broadcast: []
+  });
+}
