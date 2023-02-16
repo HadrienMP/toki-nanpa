@@ -22,7 +22,11 @@ export type Join = { roomId: RoomId };
 export const joinDecoder: Decoder<Join> = Decoder.object({
   roomId: rommIdDecoder
 });
-    // todo add a manual leaving message
+
+export type Leave = { roomId: RoomId };
+export const leaveDecoder: Decoder<Join> = Decoder.object({
+  roomId: rommIdDecoder
+});
     // todo update protocol
 
 // ------------------------------------

@@ -18,7 +18,7 @@ import {
 } from './core';
 import { InMemory } from './histories/InMemory';
 import { parse } from './lib/DecoderExtra';
-import { messageDecoder, joinDecoder, dmDecoder } from './protocol';
+import { messageDecoder, joinDecoder, dmDecoder, leaveDecoder } from './protocol';
 
 const converter = new showdown.Converter({ extensions: [showdownHighlight()] });
 
@@ -44,6 +44,10 @@ app.get('/', (_, res) => {
 });
 
 io.on('connection', (socket) => {
+
+  // -------------------------------------
+  // Utils
+  // -------------------------------------
   const user: User = socket.id as User;
   const joinFunction: JoinFunction = (roomId: RoomId) => {
     if (socket.rooms.has(roomId)) return 'Already joined';
@@ -58,6 +62,9 @@ io.on('connection', (socket) => {
   const getRooms: RoomsFunction = (_) =>
     Array.from(socket.rooms.values()).map((it) => it as RoomId);
 
+  // -------------------------------------
+  // Protocol
+  // -------------------------------------
   socket.on('join', (data) => {
     const messages: Messages = parse({ raw: data, decoder: joinDecoder })
       .map((joinRequest) => core.join({ roomId: joinRequest.roomId, user, join: joinFunction }))
@@ -82,8 +89,8 @@ io.on('connection', (socket) => {
     });
   });
   socket.on('leave', (raw) => {
-    const messages: Messages = parse({ raw, decoder: rommIdDecoder })
-      .map((room) => core.leave(room, user, leaveFunction))
+    const messages: Messages = parse({ raw, decoder: leaveDecoder })
+      .map((room) => core.leave(room.roomId, user, leaveFunction))
       .unwrapOrElse(decodingError(user));
     dispatch(messages);
   });
@@ -94,7 +101,7 @@ io.on('connection', (socket) => {
 
 const dispatch = (messages: Messages) => {
   if (messages.response) io.to(messages.response.to).emit('response', messages.response);
-  messages.broadcast.forEach((message) => io.to(message.room).emit('message', message));
+  messages.broadcast.forEach((message) => io.to(message.room).emit('broadcast', message));
 };
 function decodingError(user: User): (err: string) => Messages {
   return (message) => ({

@@ -91,7 +91,6 @@ describe('core', () => {
       });
     });
   });
-  // todo share message without joining makes you join
 
   describe('messages', () => {
     it('broadcasts them', () => {
@@ -120,7 +119,6 @@ describe('core', () => {
         ]
       });
     });
-    // todo test disconnection
     it('joins the room when sharing a message', () => {
       const message = {
         roomId: roomId,
