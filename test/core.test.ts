@@ -1,7 +1,12 @@
 import { Core, RoomId } from '../src/core';
 import { InMemory } from '../src/histories/InMemory';
 import { bettySnyder, emmaGoldman } from './fixtures';
-import { join as socketJoin, leave as socketLeave, flush as flushSockets } from './fakeSocket';
+import {
+  join as socketJoin,
+  leave as socketLeave,
+  getRooms as socketRooms,
+  flush as flushSockets
+} from './fakeSocket';
 
 describe('core', () => {
   const persistence = new InMemory();
@@ -193,6 +198,42 @@ describe('core', () => {
       const response = core.leave(roomId, emmaGoldman, socketLeave);
       expect(response).toEqual({
         response: null,
+        broadcast: []
+      });
+    });
+  });
+  describe('disconnecting', () => {
+    it('leaves all the rooms they were in', () => {
+      const room1 = 'room 1' as RoomId;
+      const room2 = 'room 2' as RoomId;
+      core.join({ roomId: room1, user: emmaGoldman, join: socketJoin });
+      core.join({ roomId: room2, user: emmaGoldman, join: socketJoin });
+      const response = core.disconnect(emmaGoldman, socketRooms);
+      expect(response).toEqual({
+        response: null,
+        broadcast: [
+          { type: 'left', room: room1, from: emmaGoldman },
+          { type: 'left', room: room2, from: emmaGoldman }
+        ]
+      });
+    });
+    it('historizes left messages', () => {
+      const room1 = 'room 1' as RoomId;
+      const room2 = 'room 2' as RoomId;
+      core.join({ roomId: room1, user: emmaGoldman, join: socketJoin });
+      core.join({ roomId: room2, user: emmaGoldman, join: socketJoin });
+      core.disconnect(emmaGoldman, socketRooms);
+      const response = core.getHistory(room1, bettySnyder);
+      expect(response).toEqual({
+        response: {
+          type: 'history',
+          room: room1,
+          data: [
+            { type: 'joined', room: room1, from: emmaGoldman },
+            { type: 'left', room: room1, from: emmaGoldman }
+          ],
+          to: bettySnyder
+        },
         broadcast: []
       });
     });

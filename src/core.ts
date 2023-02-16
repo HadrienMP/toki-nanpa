@@ -14,6 +14,7 @@ import {
 
 export type JoinFunction = (roomId: RoomId, user: User) => 'OK' | 'Already joined';
 export type LeaveFunction = (roomId: RoomId, user: User) => 'OK' | 'Already left';
+export type RoomsFunction = (user: User) => RoomId[];
 
 export class Core {
   private readonly histories;
@@ -53,6 +54,17 @@ export class Core {
     return {
       response: null,
       broadcast: [message]
+    };
+  };
+
+  disconnect = (user: User, getRooms: RoomsFunction): Messages => {
+    return {
+      response: null,
+      broadcast: getRooms(user).map((room) => {
+        const mesage = toLeftMessage(room, user);
+        this.histories.historize(room, mesage);
+        return mesage;
+      })
     };
   };
 
