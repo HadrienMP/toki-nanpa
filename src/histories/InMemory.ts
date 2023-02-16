@@ -1,6 +1,6 @@
 import { Err, Ok, Result } from '@sniptt/monads/build';
-import { History, RoomId } from '../core';
-import { Histories, HistoryError } from './Histories';
+import { RoomId } from '../core';
+import { History, Histories, HistoryError } from './Histories';
 
 export class InMemory implements Histories {
   private rooms: Record<RoomId, History> = {};

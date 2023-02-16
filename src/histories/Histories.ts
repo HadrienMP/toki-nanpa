@@ -1,5 +1,7 @@
 import { Result } from '@sniptt/monads/build';
-import { History, RoomId } from '../core';
+import { RoomId } from '../core';
+
+export type History = unknown[];
 
 export interface Histories {
   create: (roomId: RoomId) => Result<null, HistoryError>;
@@ -11,4 +13,3 @@ export enum HistoryError {
   UNKNOWN_ROOM = 'UNKNOWN_ROOM',
   ALREADY_CREATED = 'ALREADY_CREATED'
 }
-

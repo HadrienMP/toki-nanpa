@@ -1,21 +1,23 @@
-import { Err, Ok, Result } from '@sniptt/monads/build';
-import { Server } from 'socket.io';
 import { Decoder } from 'elm-decoders';
 import { rommIdDecoder, RoomId, User } from './core';
+import { History, HistoryError } from './histories/Histories';
 
 // ------------------------------------
 // Inbound
 // ------------------------------------
+
 export type Inbound = { roomId: RoomId; data: unknown };
 export const messageDecoder: Decoder<Inbound> = Decoder.object({
   roomId: rommIdDecoder,
   data: Decoder.any
 });
+
 export type InDirectMessage = { to: User; data: unknown };
 export const dmDecoder: Decoder<InDirectMessage> = Decoder.object({
   to: Decoder.string.map((it) => it as User),
   data: Decoder.any
 });
+
 export type Join = { roomId: RoomId };
 export const joinDecoder: Decoder<Join> = Decoder.object({
   roomId: rommIdDecoder
@@ -25,60 +27,41 @@ export const joinDecoder: Decoder<Join> = Decoder.object({
 // Outbound
 // ------------------------------------
 
-export type Outbound<T> = {
-  type: 'left' | 'message' | 'joined' | 'direct-message' | 'history';
+export type ErrorCode = HistoryError | 'DECODING_FAILED';
+export type DirectResponse = { to: User } & (
+  | { type: 'history'; room: RoomId; data: History }
+  | { type: 'error'; code: ErrorCode; message: string }
+);
+
+export type BroadcastMessage = {
   room: RoomId;
-  data: T;
-};
-export type OutDirectMessage<T> = { to: User; data: T };
+  from: User;
+} & ({ type: 'joined'; data: {} } | { type: 'message'; data: unknown });
 
-export const toHistoryMsg = (
-  room: RoomId,
-  history: Outbound<any>[]
-): Outbound<Outbound<any>[]> => ({
-  type: 'history',
-  room,
-  data: history
-});
-export const toJoinedMsg = (room: RoomId): Outbound<{}> => ({
-  type: 'joined',
-  room,
-  data: {}
-});
-export const toLeftMsg = (room: RoomId): Outbound<{}> => ({
-  type: 'left',
-  room,
-  data: {}
-});
-export const toMsg = <T>(params: { room: RoomId; data: T }): Outbound<T> => ({
+// ------------------------------------
+// Outbound factories
+// ------------------------------------
+export const toOutBound = (message: Inbound, sender: User): BroadcastMessage => ({
   type: 'message',
-  room: params.room,
-  data: params.data
+  room: message.roomId,
+  from: sender,
+  data: message.data
 });
-export const toDirectMessage = <T>(params: { peer: User; data: T }): OutDirectMessage<T> => ({
-  to: params.peer,
-  data: params.data
+export const toErrorResponse = (val: ErrorCode, user: User): DirectResponse => ({
+  type: 'error',
+  code: val,
+  message: val,
+  to: user
 });
-
-// ------------------------------------
-// Sending messages
-// ------------------------------------
-
-export const sendMessageWith =
-  (io: Server, peer: User) =>
-  (message: Outbound<any>): void => {
-    io.to(message.room).emit('message', { ...message, from: peer });
-  };
-
-export const sendDirectMessageWith =
-  (io: Server, peer: User) =>
-  (message: OutDirectMessage<any>): void => {
-    io.to(message.to).emit('direct-message', { ...message, from: peer });
-  };
-
-export const sendErrorWith =
-  (io: Server, peer: User) =>
-  (e: any): void => {
-    console.error(peer, { e });
-    io.to(peer).emit('error', e);
-  };
+export const historyMessage = (roomId: RoomId, user: User, history: History): DirectResponse => ({
+  type: 'history',
+  room: roomId,
+  data: history,
+  to: user
+});
+export const toJoinedMessage = (room: RoomId, user: User): BroadcastMessage => ({
+  type: 'joined',
+  room: room,
+  from: user,
+  data: {}
+});
